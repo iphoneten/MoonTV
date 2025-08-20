@@ -339,8 +339,15 @@ export default function VideoCard({
           </div>
         )}
 
+        {/* 年份显示 */}
+        {actualYear && (
+          <div className='absolute bottom-2 right-2 bg-black/70 text-white text-xs font-semibold px-2 py-1 rounded-md shadow-md transition-all duration-300 ease-out group-hover:scale-110'>
+            {actualYear}
+          </div>
+        )}
+
         {/* 豆瓣链接 */}
-        {config.showDoubanLink && actualDoubanId && (
+{/*         {config.showDoubanLink && actualDoubanId && (
           <a
             href={`https://movie.douban.com/subject/${actualDoubanId}`}
             target='_blank'
@@ -352,7 +359,7 @@ export default function VideoCard({
               <Link size={16} />
             </div>
           </a>
-        )}
+        )} */}
       </div>
 
       {/* 进度条 */}

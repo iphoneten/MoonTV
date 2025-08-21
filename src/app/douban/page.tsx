@@ -13,7 +13,7 @@ import DoubanCardSkeleton from '@/components/DoubanCardSkeleton';
 import DoubanSelector from '@/components/DoubanSelector';
 import PageLayout from '@/components/PageLayout';
 import VideoCard from '@/components/VideoCard';
-
+const pageLimit = 50;
 function DoubanPageClient() {
   const searchParams = useSearchParams();
   const [doubanData, setDoubanData] = useState<DoubanItem[]>([]);
@@ -84,7 +84,7 @@ function DoubanPageClient() {
   }, [type, tag, custom]);
 
   // 生成骨架屏数据
-  const skeletonData = Array.from({ length: 25 }, (_, index) => index);
+  const skeletonData = Array.from({ length: pageLimit }, (_, index) => index);
 
   // 生成API请求参数的辅助函数
   const getRequestParams = useCallback(
@@ -95,7 +95,7 @@ function DoubanPageClient() {
           kind: 'tv' as const,
           category: type,
           type: secondarySelection,
-          pageLimit: 25,
+          pageLimit: pageLimit,
           pageStart,
         };
       }
@@ -105,7 +105,7 @@ function DoubanPageClient() {
         kind: type as 'tv' | 'movie',
         category: primarySelection,
         type: secondarySelection,
-        pageLimit: 25,
+        pageLimit: pageLimit,
         pageStart,
       };
     },
@@ -121,7 +121,7 @@ function DoubanPageClient() {
         data = await getDoubanList({
           tag,
           type,
-          pageLimit: 25,
+          pageLimit: pageLimit,
           pageStart: 0,
         });
       } else {
@@ -130,7 +130,7 @@ function DoubanPageClient() {
 
       if (data.code === 200) {
         setDoubanData(data.list);
-        setHasMore(data.list.length === 25);
+        setHasMore(data.list.length === pageLimit);
         setLoading(false);
       } else {
         throw new Error(data.message || '获取数据失败');
@@ -198,18 +198,18 @@ function DoubanPageClient() {
             data = await getDoubanList({
               tag,
               type,
-              pageLimit: 25,
-              pageStart: currentPage * 25,
+              pageLimit: pageLimit,
+              pageStart: currentPage * pageLimit,
             });
           } else {
             data = await getDoubanCategories(
-              getRequestParams(currentPage * 25)
+              getRequestParams(currentPage * pageLimit)
             );
           }
 
           if (data.code === 200) {
             setDoubanData((prev) => [...prev, ...data.list]);
-            setHasMore(data.list.length === 25);
+            setHasMore(data.list.length === pageLimit);
           } else {
             throw new Error(data.message || '获取数据失败');
           }

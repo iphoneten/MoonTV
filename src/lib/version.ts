@@ -23,6 +23,7 @@ const VERSION_CHECK_URLS = [
  */
 export async function checkForUpdates(): Promise<UpdateStatus> {
   try {
+
     // 尝试从主要URL获取版本信息
     const primaryVersion = await fetchVersionFromUrl(VERSION_CHECK_URLS[0]);
     if (primaryVersion) {
@@ -84,7 +85,7 @@ function compareVersions(remoteVersion: string): UpdateStatus {
   try {
     // 将版本号转换为数字进行比较
     const current = parseInt(CURRENT_VERSION, 10);
-    const remote = parseInt(remoteVersion, 10);
+    const remote = parseInt(CURRENT_VERSION, 10);
 
     return remote > current ? UpdateStatus.HAS_UPDATE : UpdateStatus.NO_UPDATE;
   } catch (error) {

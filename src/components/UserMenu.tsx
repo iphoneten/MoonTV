@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
-import { checkForUpdates, CURRENT_VERSION, UpdateStatus } from '@/lib/version';
+import { UpdateStatus } from '@/lib/version';
 
 interface AuthInfo {
   username?: string;
@@ -113,8 +113,8 @@ export const UserMenu: React.FC = () => {
   useEffect(() => {
     const checkUpdate = async () => {
       try {
-        const status = await checkForUpdates();
-        setUpdateStatus(status);
+        // const status = await checkForUpdates();
+        // setUpdateStatus(status);
       } catch (error) {
         console.warn('版本检查失败:', error);
       } finally {
@@ -329,13 +329,12 @@ export const UserMenu: React.FC = () => {
                 当前用户
               </span>
               <span
-                className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${
-                  (authInfo?.role || 'user') === 'owner'
-                    ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
-                    : (authInfo?.role || 'user') === 'admin'
+                className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${(authInfo?.role || 'user') === 'owner'
+                  ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
+                  : (authInfo?.role || 'user') === 'admin'
                     ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
                     : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                }`}
+                  }`}
               >
                 {getRoleText(authInfo?.role || 'user')}
               </span>
@@ -401,7 +400,7 @@ export const UserMenu: React.FC = () => {
           <div className='my-1 border-t border-gray-200 dark:border-gray-700'></div>
 
           {/* 版本信息 */}
-{/*           <button
+          {/*           <button
             onClick={() => 
               window.open('https://github.com/senshinya/MoonTV', '_blank')
             }
@@ -552,11 +551,10 @@ export const UserMenu: React.FC = () => {
             </div>
             <input
               type='text'
-              className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-                enableDoubanProxy
-                  ? 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400'
-                  : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 text-gray-400 dark:text-gray-500 placeholder-gray-400 dark:placeholder-gray-600 cursor-not-allowed'
-              }`}
+              className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${enableDoubanProxy
+                ? 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400'
+                : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 text-gray-400 dark:text-gray-500 placeholder-gray-400 dark:placeholder-gray-600 cursor-not-allowed'
+                }`}
               placeholder='例如: https://proxy.example.com/fetch?url='
               value={doubanProxyUrl}
               onChange={(e) => handleDoubanProxyUrlChange(e.target.value)}
@@ -603,11 +601,10 @@ export const UserMenu: React.FC = () => {
             </div>
             <input
               type='text'
-              className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-                enableImageProxy
-                  ? 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400'
-                  : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 text-gray-400 dark:text-gray-500 placeholder-gray-400 dark:placeholder-gray-600 cursor-not-allowed'
-              }`}
+              className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${enableImageProxy
+                ? 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400'
+                : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 text-gray-400 dark:text-gray-500 placeholder-gray-400 dark:placeholder-gray-600 cursor-not-allowed'
+                }`}
               placeholder='例如: https://imageproxy.example.com/?url='
               value={imageProxyUrl}
               onChange={(e) => handleImageProxyUrlChange(e.target.value)}

@@ -11,10 +11,11 @@ interface PageLayoutProps {
 }
 
 const PageLayout = ({ children, activePath = '/' }: PageLayoutProps) => {
+  const isHideBottomNav = ['/login', '/admin'].includes(activePath);
   return (
     <div className='w-full min-h-screen'>
       {/* 移动端头部 */}
-      <MobileHeader showBackButton={['/play'].includes(activePath)} />
+      <MobileHeader showBackButton={['/play', '/admin'].includes(activePath)} />
 
       {/* 主要布局容器 */}
       <div className='flex md:grid md:grid-cols-[auto_1fr] w-full min-h-screen md:min-h-auto'>
@@ -52,7 +53,7 @@ const PageLayout = ({ children, activePath = '/' }: PageLayoutProps) => {
 
       {/* 移动端底部导航 */}
       <div className='md:hidden'>
-        <MobileBottomNav activePath={activePath} />
+        {!isHideBottomNav && (<MobileBottomNav activePath={activePath} />)}
       </div>
     </div>
   );

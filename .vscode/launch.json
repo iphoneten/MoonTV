@@ -2,15 +2,17 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Next.js: Debug Next.js Application",
+      "name": "Next.js: Debug",
       "type": "node",
       "request": "launch",
       "cwd": "${workspaceFolder}",
-      "runtimeExecutable": "pnpm", // 或者 "npm" 或 "yarn"
-      "runtimeArgs": ["run", "dev"], // 对应 package.json 中的 dev 脚本
+      "runtimeExecutable": "/Users/andyfan/.nvm/versions/node/v22.18.0/bin/node",
+      "runtimeArgs": ["./node_modules/next/dist/bin/next", "dev"],
       "skipFiles": ["<node_internals>/**"],
+      "console": "integratedTerminal",
       "outputCapture": "std",
-      "console": "integratedTerminal"
+      "sourceMaps": true,
+      "outFiles": ["${workspaceFolder}/.next/**/*.js"]
     }
   ]
 }

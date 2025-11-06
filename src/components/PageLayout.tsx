@@ -11,7 +11,7 @@ interface PageLayoutProps {
 }
 
 const PageLayout = ({ children, activePath = '/' }: PageLayoutProps) => {
-  const isHideBottomNav = ['/login', '/admin'].includes(activePath);
+  const isHideBottomNav = ['/play', '/admin'].includes(activePath);
   return (
     <div className='w-full min-h-screen'>
       {/* 移动端头部 */}

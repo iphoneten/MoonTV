@@ -6,6 +6,10 @@ const nextConfig = {
     dirs: ['src'],
   },
 
+  experimental: {
+    navigationCacheLifetime: 300, // 秒，延长缓存
+  },
+  
   reactStrictMode: false,
   swcMinify: true,
 

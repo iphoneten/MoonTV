@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Next.js: Debug Next.js Application",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "runtimeExecutable": "pnpm", // 或者 "npm" 或 "yarn"
+      "runtimeArgs": ["run", "dev"], // 对应 package.json 中的 dev 脚本
+      "skipFiles": ["<node_internals>/**"],
+      "outputCapture": "std",
+      "console": "integratedTerminal"
+    }
+  ]
+}

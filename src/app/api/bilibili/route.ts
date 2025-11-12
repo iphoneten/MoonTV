@@ -2,6 +2,7 @@
 
 import { NextResponse } from "next/server";
 
+import { getCacheTime } from "@/lib/config";
 import { BilibiliResult, DoubanItem } from "@/lib/types";
 
 interface bilibiliData {
@@ -112,7 +113,13 @@ export async function GET(request: Request) {
       has_next: has_next,
       list: tmpList
     }
-    return NextResponse.json(result, { status: 200 });
+    const cacheTime = await getCacheTime();
+    const headers = {
+      'Cache-Control': `public, max-age=${cacheTime}, s-maxage=${cacheTime}`,
+      'CDN-Cache-Control': `public, s-maxage=${cacheTime}`,
+      'Vercel-CDN-Cache-Control': `public, s-maxage=${cacheTime}`,
+    };
+    return NextResponse.json(result, { status: 200, headers });
   } catch (error) {
     console.error('Error fetching data:', error);
     return NextResponse.json({ error: 'Failed to fetch data' }, { status: 500 });

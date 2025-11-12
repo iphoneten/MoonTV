@@ -44,6 +44,8 @@ const fetchGuoMan = async (coursor: number, type?: string) => {
   }
 }
 
+export const runtime = 'edge';
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const coursor = searchParams.get('coursor');

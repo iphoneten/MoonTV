@@ -117,3 +117,9 @@ export interface SkipConfig {
   intro_time: number; // 片头时间（秒）
   outro_time: number; // 片尾时间（秒）
 }
+
+export interface BilibiliResult {
+  coursor: number;
+  has_next: boolean;
+  list: DoubanItem[];
+}

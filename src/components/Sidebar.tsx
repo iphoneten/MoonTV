@@ -2,7 +2,7 @@
 
 'use client';
 
-import { Cat, Clover, Film, Home, Menu, Search, Star, Tv, Video, Cctv } from 'lucide-react';
+import { Cat, Cctv, Clover, Film, Home, Menu, Search, Star, Tv, Video } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {

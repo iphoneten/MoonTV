@@ -4,6 +4,15 @@ import { NextResponse } from "next/server";
 
 import { BilibiliResult, DoubanItem } from "@/lib/types";
 
+interface bilibiliData {
+  card_style: string;
+  episode_id: string;
+  title: string;
+  cover: string;
+  sub_items: bilibiliData[];
+  rating: string;
+  season_id: string;
+}
 
 const fetchGuoMan = async (coursor: number, type?: string) => {
   // 添加超时控制
@@ -54,7 +63,7 @@ export async function GET(request: Request) {
     const tmpList: DoubanItem[] = []
 
     if (type === 'movie' || type === 'tv') {
-      items.forEach((item: any) => {
+      items.forEach((item: bilibiliData) => {
         const tmp: DoubanItem = {
           id: item.episode_id,
           title: item.title,
@@ -66,9 +75,9 @@ export async function GET(request: Request) {
       })
     }
 
-    items.forEach((item: any) => {
+    items.forEach((item: bilibiliData) => {
       const subitems = item.sub_items || []
-      subitems.forEach((subitem: any) => {
+      subitems.forEach((subitem: bilibiliData) => {
         if (subitem.card_style === 'v_card') {
           const tmp: DoubanItem = {
             id: subitem.episode_id,
@@ -81,7 +90,7 @@ export async function GET(request: Request) {
         }
         if (subitem.card_style === 'rank') {
           const subsubitems = subitem.sub_items
-          subsubitems.forEach((subsubitem: any) => {
+          subsubitems.forEach((subsubitem: bilibiliData) => {
             if (subsubitem.card_style === 'v_card') {
               const tmp: DoubanItem = {
                 id: subsubitem.season_id,

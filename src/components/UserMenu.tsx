@@ -39,8 +39,8 @@ export const UserMenu: React.FC = () => {
   const [passwordError, setPasswordError] = useState('');
 
   // 版本检查相关状态
-  const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
-  const [isChecking, setIsChecking] = useState(true);
+  const [updateStatus] = useState<UpdateStatus | null>(null);
+  // const [isChecking, setIsChecking] = useState(true);
 
   // 确保组件已挂载
   useEffect(() => {
@@ -118,7 +118,7 @@ export const UserMenu: React.FC = () => {
       } catch (error) {
         console.warn('版本检查失败:', error);
       } finally {
-        setIsChecking(false);
+        // setIsChecking(false);
       }
     };
 

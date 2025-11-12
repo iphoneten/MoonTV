@@ -1,9 +1,11 @@
 'use client';
 
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+
+import { DoubanItem } from "@/lib/types";
+
 import PageLayout from "@/components/PageLayout";
 import VideoCard from "@/components/VideoCard";
-import { DoubanItem } from "@/lib/types";
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 
 function BTVClient() {
   const [loading, setLoading] = useState(false);
@@ -13,15 +15,11 @@ function BTVClient() {
   const observer = useRef<IntersectionObserver | null>(null);
 
 
-  useEffect(() => {
-    getData();
-  }, [])
-
-  const getData = async () => {
+  const getData = useCallback(async () => {
     if (loading) return;
     setLoading(true);
     try {
-      let url = `/api/bilibili?coursor=${cousour}&type=tv`;
+      const url = `/api/bilibili?coursor=${cousour}&type=tv`;
       const respose = await fetch(url);
       if (respose.status !== 200) {
         throw new Error(`HTTP error! Status: ${respose.status}`);
@@ -34,9 +32,13 @@ function BTVClient() {
       setLoading(false);
     } catch (error) {
       setLoading(false);
-      console.error(error);
     }
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    getData();
+  }, [getData]);
 
   const lastElementRef = useCallback((node: HTMLDivElement | null) => {
     if (loading) return;
@@ -47,7 +49,7 @@ function BTVClient() {
       }
     });
     if (node) observer.current.observe(node);
-  }, [loading, hasMore]);
+  }, [loading, hasMore, getData]);
 
   return (
     <PageLayout activePath='/bilibili/guoman'>

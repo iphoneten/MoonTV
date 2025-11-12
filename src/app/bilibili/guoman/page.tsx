@@ -1,11 +1,10 @@
 'use client';
-import { Suspense, useEffect, useState, useRef, useCallback } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+
+import { DoubanItem } from "@/lib/types";
 
 import PageLayout from "@/components/PageLayout";
-import { DoubanItem } from "@/lib/types";
-import DoubanCardSkeleton from "@/components/DoubanCardSkeleton";
 import VideoCard from "@/components/VideoCard";
-import { useRouter, useSearchParams } from "next/navigation";
 
 const GuomanPageClient = () => {
   const [loading, setLoading] = useState(false);
@@ -13,20 +12,16 @@ const GuomanPageClient = () => {
   const [hasMore, setHasMore] = useState(false);
   const [data, setData] = useState<DoubanItem[]>([]);
   const observer = useRef<IntersectionObserver | null>(null);
-  const searchParams = useSearchParams();
-  const type = searchParams.get('type');
 
-  useEffect(() => {
-    getData();
-  }, [])
-
-  const getData = async () => {
+  const getData = useCallback(async () => {
     if (loading) return;
     setLoading(true);
     try {
-      let url = `/api/bilibili?coursor=${cousour}`;
-      if (type) url += `&type=${type}`;
+      const url = `/api/bilibili?coursor=${cousour}`;
       const respose = await fetch(url);
+      if (respose.status !== 200) {
+        throw new Error(`HTTP error! Status: ${respose.status}`);
+      }
       const data = await respose.json();
       const { list, has_next, coursor } = data;
       setData(preData => [...preData, ...list]);
@@ -35,9 +30,13 @@ const GuomanPageClient = () => {
       setLoading(false);
     } catch (error) {
       setLoading(false);
-      console.error(error);
     }
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    getData();
+  }, [getData]);
 
   const lastElementRef = useCallback((node: HTMLDivElement | null) => {
     if (loading) return;
@@ -48,7 +47,7 @@ const GuomanPageClient = () => {
       }
     });
     if (node) observer.current.observe(node);
-  }, [loading, hasMore]);
+  }, [loading, hasMore, getData]);
 
   return (
     <PageLayout activePath='/bilibili/guoman'>

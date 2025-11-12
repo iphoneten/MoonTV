@@ -41,13 +41,12 @@ function VersionDisplay() {
       <span className='font-mono'>v{CURRENT_VERSION}</span>
       {!isChecking && updateStatus !== UpdateStatus.FETCH_FAILED && (
         <div
-          className={`flex items-center gap-1.5 ${
-            updateStatus === UpdateStatus.HAS_UPDATE
-              ? 'text-yellow-600 dark:text-yellow-400'
-              : updateStatus === UpdateStatus.NO_UPDATE
+          className={`flex items-center gap-1.5 ${updateStatus === UpdateStatus.HAS_UPDATE
+            ? 'text-yellow-600 dark:text-yellow-400'
+            : updateStatus === UpdateStatus.NO_UPDATE
               ? 'text-green-600 dark:text-green-400'
               : ''
-          }`}
+            }`}
         >
           {updateStatus === UpdateStatus.HAS_UPDATE && (
             <>
@@ -231,7 +230,7 @@ function LoginPageClient() {
       </div>
 
       {/* 版本信息显示 */}
-{/*       <VersionDisplay /> */}
+      {false && <VersionDisplay />}
     </div>
   );
 }

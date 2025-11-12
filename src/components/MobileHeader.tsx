@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 
+import { MobileSidebar } from '@/components/MobileSidebar';
+
 import { BackButton } from './BackButton';
 import { useSite } from './SiteProvider';
 import { ThemeToggle } from './ThemeToggle';
@@ -19,6 +21,7 @@ const MobileHeader = ({ showBackButton = false }: MobileHeaderProps) => {
         {/* 左侧：返回按钮和设置按钮 */}
         <div className='flex items-center gap-2'>
           {showBackButton && <BackButton />}
+          <MobileSidebar />
         </div>
 
         {/* 右侧按钮 */}

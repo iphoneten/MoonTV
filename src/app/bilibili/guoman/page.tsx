@@ -8,16 +8,16 @@ import VideoCard from "@/components/VideoCard";
 
 const GuomanPageClient = () => {
   const [loading, setLoading] = useState(false);
-  const [cousour, setCousour] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [data, setData] = useState<DoubanItem[]>([]);
   const observer = useRef<IntersectionObserver | null>(null);
+  const cousourRef = useRef(0);
 
   const getData = useCallback(async () => {
     if (loading) return;
     setLoading(true);
     try {
-      const url = `/api/bilibili?coursor=${cousour}`;
+      const url = `/api/bilibili?coursor=${cousourRef.current}`;
       const respose = await fetch(url);
       if (respose.status !== 200) {
         throw new Error(`HTTP error! Status: ${respose.status}`);
@@ -26,8 +26,8 @@ const GuomanPageClient = () => {
       const { list, has_next, coursor } = data;
       setData(preData => [...preData, ...list]);
       setHasMore(has_next);
-      setCousour(coursor);
       setLoading(false);
+      cousourRef.current = coursor;
     } catch (error) {
       setLoading(false);
     }

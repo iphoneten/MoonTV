@@ -1,5 +1,5 @@
-'use client'
-
+'use client';
+import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 
 import { DoubanItem } from "@/lib/types";
@@ -7,18 +7,25 @@ import { DoubanItem } from "@/lib/types";
 import PageLayout from "@/components/PageLayout";
 import VideoCard from "@/components/VideoCard";
 
-function BMoviesClient() {
+const BilibiliPageClient = () => {
+  const searchParams = useSearchParams();
+
   const [loading, setLoading] = useState(false);
+  const [cousour, setCousour] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [data, setData] = useState<DoubanItem[]>([]);
   const observer = useRef<IntersectionObserver | null>(null);
-  const cousourRef = useRef(0);
 
+  const type = searchParams.get('type') || 'movie';
   const getData = useCallback(async () => {
     if (loading) return;
     setLoading(true);
     try {
-      const url = `/api/bilibili?coursor=${cousourRef.current}&type=movie`;
+      let url = `/api/bilibili?coursor=${cousour}`;
+      if (type !== 'guoman') {
+        url = `/api/bilibili?type=${type}&coursor=${cousour}`
+      }
+      // const url = `/api/bilibili?coursor=${cousour}`;
       const respose = await fetch(url);
       if (respose.status !== 200) {
         throw new Error(`HTTP error! Status: ${respose.status}`);
@@ -27,16 +34,19 @@ function BMoviesClient() {
       const { list, has_next, coursor } = data;
       setData(preData => [...preData, ...list]);
       setHasMore(has_next);
+      setCousour(coursor);
       setLoading(false);
-      cousourRef.current = coursor;
     } catch (error) {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [type]);
 
   useEffect(() => {
     getData();
+    setData([]);
+    setCousour(0);
+    setHasMore(false);
   }, [getData]);
 
   const lastElementRef = useCallback((node: HTMLDivElement | null) => {
@@ -51,7 +61,7 @@ function BMoviesClient() {
   }, [loading, hasMore, getData]);
 
   return (
-    <PageLayout activePath='/bilibili/movies'>
+    <PageLayout activePath='/bilibili/guoman'>
       <div className='max-w-[95%] mx-auto mt-8 overflow-visible'>
         {/* 内容网格 */}
         <div className='grid grid-cols-3 gap-x-2 gap-y-12 px-0 sm:px-2 sm:grid-cols-[repeat(auto-fit,minmax(160px,1fr))] sm:gap-x-8 sm:gap-y-20'>
@@ -98,10 +108,10 @@ function BMoviesClient() {
   )
 }
 
-export default function BMoviesPage() {
+export default function BilibiliPage() {
   return (
     <Suspense fallback={<div>Loading...</div>}>
-      <BMoviesClient />
+      <BilibiliPageClient />
     </Suspense>
   );
 }

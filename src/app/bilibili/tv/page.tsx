@@ -9,17 +9,16 @@ import VideoCard from "@/components/VideoCard";
 
 function BTVClient() {
   const [loading, setLoading] = useState(false);
-  const [cousour, setCousour] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [data, setData] = useState<DoubanItem[]>([]);
   const observer = useRef<IntersectionObserver | null>(null);
-
+  const cousour = useRef(0);
 
   const getData = useCallback(async () => {
     if (loading) return;
     setLoading(true);
     try {
-      const url = `/api/bilibili?coursor=${cousour}&type=tv`;
+      const url = `/api/bilibili?coursor=${cousour.current}&type=tv`;
       const respose = await fetch(url);
       if (respose.status !== 200) {
         throw new Error(`HTTP error! Status: ${respose.status}`);
@@ -28,8 +27,8 @@ function BTVClient() {
       const { list, has_next, coursor } = data;
       setData(preData => [...preData, ...list]);
       setHasMore(has_next);
-      setCousour(coursor);
       setLoading(false);
+      cousour.current = coursor;
     } catch (error) {
       setLoading(false);
     }
@@ -52,7 +51,7 @@ function BTVClient() {
   }, [loading, hasMore, getData]);
 
   return (
-    <PageLayout activePath='/bilibili/guoman'>
+    <PageLayout activePath='/bilibili/tv'>
       <div className='max-w-[95%] mx-auto mt-8 overflow-visible'>
         {/* 内容网格 */}
         <div className='grid grid-cols-3 gap-x-2 gap-y-12 px-0 sm:px-2 sm:grid-cols-[repeat(auto-fit,minmax(160px,1fr))] sm:gap-x-8 sm:gap-y-20'>

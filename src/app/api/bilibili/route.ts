@@ -22,8 +22,9 @@ const fetchGuoMan = async (coursor: number, type?: string) => {
   const timeoutId = setTimeout(() => controller.abort(), 10000);
   let url = `https://tv-api-black.vercel.app/api/bilibili?coursor=${coursor}`;
   if (type !== undefined) {
-    url = `https://tv-api-black.vercel.app/api/bilibili?name=${type}&coursor=${coursor}`;
+    url = `https://tv-api-black.vercel.app/api/bilibili?type=${type}&coursor=${coursor}`;
   }
+  console.log('fetch url:', url);
   try {
     const response = await fetch(url, {
       method: 'GET',
@@ -39,6 +40,7 @@ const fetchGuoMan = async (coursor: number, type?: string) => {
     if (!response.ok) {
       throw new Error(`HTTP error! Status: ${response.status}`);
     }
+    clearTimeout(timeoutId);
     const data = await response.json();
     return data;
   } catch (error) {
@@ -49,9 +51,9 @@ const fetchGuoMan = async (coursor: number, type?: string) => {
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const coursor = searchParams.get('coursor');
+  const coursor = searchParams.get('coursor') || 0;
   const type = searchParams.get('type') || undefined;
-  console.log('bilibili called: ', request.url);
+  console.log('bilibili called: ', request.url, 'coursor:', coursor, 'type:', type);
   try {
     const jsonData = await fetchGuoMan(Number(coursor), type);
     const code = jsonData.code
@@ -64,7 +66,7 @@ export async function GET(request: Request) {
     const has_next = data.has_next
     const items = data.items
     const tmpList: DoubanItem[] = []
-
+    console.log('coursor:', cour);
     if (type === 'movie' || type === 'tv') {
       items.forEach((item: bilibiliData) => {
         const tmp: DoubanItem = {
@@ -108,10 +110,19 @@ export async function GET(request: Request) {
         }
       })
     })
+
+    const seenTitles = new Set<string>();
+    const uniqueTmpList = tmpList.filter(item => {
+      if (seenTitles.has(item.title)) return false;
+      seenTitles.add(item.title);
+      return true;
+    });
+
+    // console.log('uniqueTmpList: ', uniqueTmpList);
     const result: BilibiliResult = {
       coursor: cour,
       has_next: has_next,
-      list: tmpList
+      list: uniqueTmpList
     }
     const headers = {
       'Cache-Control': 'no-store'

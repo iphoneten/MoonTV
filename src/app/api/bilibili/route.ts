@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import { getCacheTime } from "@/lib/config";
 import { BilibiliResult, DoubanItem } from "@/lib/types";
 
-export const runtime = 'nodejs';
+export const runtime = 'edge';
 
 interface bilibiliData {
   card_style: string;

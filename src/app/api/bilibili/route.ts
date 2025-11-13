@@ -21,9 +21,9 @@ const fetchGuoMan = async (coursor: number, type?: string) => {
   // 添加超时控制
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10000);
-  let url = `https://api.bilibili.com/pgc/page/web/v3/feed?name=guochuang&coursor=${coursor}`;
+  let url = `https://tv-api-black.vercel.app/api/bilibili?coursor=${coursor}`;
   if (type !== undefined) {
-    url = `https://api.bilibili.com/pgc/page/web/feed?name=${type}&coursor=${coursor}&new_cursor_status=true`
+    url = `https://tv-api-black.vercel.app/api/bilibili?name=${type}&coursor=${coursor}`;
   }
   try {
     const response = await fetch(url, {

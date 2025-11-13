@@ -5,6 +5,8 @@ import { NextResponse } from "next/server";
 import { getCacheTime } from "@/lib/config";
 import { BilibiliResult, DoubanItem } from "@/lib/types";
 
+export const runtime = 'nodejs';
+
 interface bilibiliData {
   card_style: string;
   episode_id: string;
@@ -31,6 +33,7 @@ const fetchGuoMan = async (coursor: number, type?: string) => {
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
         Referer: 'https://www.bilibili.com/',
+        Origin: 'https://www.bilibili.com',
         Accept: 'application/json, text/plain, */*',
       },
     });
@@ -44,8 +47,6 @@ const fetchGuoMan = async (coursor: number, type?: string) => {
     throw error;
   }
 }
-
-export const runtime = 'edge';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);

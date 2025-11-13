@@ -2,7 +2,6 @@
 
 import { NextResponse } from "next/server";
 
-import { getCacheTime } from "@/lib/config";
 import { BilibiliResult, DoubanItem } from "@/lib/types";
 
 export const runtime = 'edge';
@@ -114,11 +113,8 @@ export async function GET(request: Request) {
       has_next: has_next,
       list: tmpList
     }
-    const cacheTime = await getCacheTime();
     const headers = {
-      'Cache-Control': `public, max-age=${cacheTime}, s-maxage=${cacheTime}`,
-      'CDN-Cache-Control': `public, s-maxage=${cacheTime}`,
-      'Vercel-CDN-Cache-Control': `public, s-maxage=${cacheTime}`,
+      'Cache-Control': 'no-store'
     };
     return NextResponse.json(result, { status: 200, headers });
   } catch (error) {

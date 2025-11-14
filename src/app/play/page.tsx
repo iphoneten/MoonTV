@@ -6,7 +6,7 @@ import Artplayer from 'artplayer';
 import Hls from 'hls.js';
 import { Heart } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { FC, Suspense, useEffect, useRef, useState } from 'react';
 
 import {
   deleteFavorite,
@@ -34,7 +34,7 @@ declare global {
   }
 }
 
-function PlayPageClient() {
+const PlayPageClient: FC = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -48,7 +48,8 @@ function PlayPageClient() {
   const [loadingMessage, setLoadingMessage] = useState('正在搜索播放源...');
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<SearchResult | null>(null);
-
+  const [isShowTitle, setIsShowTitle] = useState(true);
+  const isShowTitleRef = useRef(isShowTitle);
   // 收藏状态
   const [favorited, setFavorited] = useState(false);
 
@@ -1158,6 +1159,45 @@ function PlayPageClient() {
     }
   };
 
+  const titleLayerControl = () => {
+    if (!artPlayerRef.current) return;
+    const titleLayerText = videoTitleRef.current + (totalEpisodes > 0 ? ' - 第' + (currentEpisodeIndexRef.current + 1) + '集' : '');
+    let titleTimeout;
+    if (isShowTitleRef.current) {
+      titleTimeout = setTimeout(() => {
+        isShowTitleRef.current = !isShowTitleRef.current; // 用 ref 记录
+        setIsShowTitle(isShowTitleRef.current); // 反映到 UI
+      }, 5000)
+    } else {
+      if (titleTimeout) {
+        clearInterval(titleTimeout);
+      }
+    }
+
+    //更新显示内容
+    artPlayerRef.current.layers.update({
+      name: 'titleLayer',
+      html: `<div class="artplayer-title"><span class="artplayer-title-content">${titleLayerText}</span></div>`,
+      style: {
+        position: 'absolute',
+        top: '10px',
+        left: '15px',
+        color: '#fff',
+        fontSize: '14px',
+        textShadow: '0px 1px 2px rgba(0,0,0,0.5)',
+        pointerEvents: 'none',
+        // [新增] 初始状态为可见
+        opacity: (isShowTitleRef.current ? '1' : '0'),
+        // [新增] 添加 0.5 秒的透明度过渡效果
+        transition: 'opacity 0.5s ease',
+      },
+    });
+  }
+
+  useEffect(() => {
+    titleLayerControl();
+  }, [currentEpisodeIndex, videoTitle, isShowTitleRef.current]);
+
   useEffect(() => {
     if (
       !Artplayer ||
@@ -1217,7 +1257,7 @@ function PlayPageClient() {
       artPlayerRef.current = null;
     }
 
-    const titleLayerText = videoTitle + (totalEpisodes > 0 ? ' - 第' + (currentEpisodeIndex + 1) + '集' : '');
+    const titleLayerText = videoTitleRef.current + (totalEpisodes > 0 ? ' - 第' + (currentEpisodeIndexRef.current + 1) + '集' : '');
     try {
       // 创建新的播放器实例
       Artplayer.PLAYBACK_RATE = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
@@ -1443,10 +1483,14 @@ function PlayPageClient() {
           }
         ],
       });
-
       // 监听播放器事件
       artPlayerRef.current.on('ready', () => {
+        titleLayerControl();
         setError(null);
+      });
+      artPlayerRef.current.on('document:mousemove', () => {
+        isShowTitleRef.current = !isShowTitleRef.current; // 用 ref 记录
+        setIsShowTitle(isShowTitleRef.current); // 反映到 UI
       });
 
       artPlayerRef.current.on('video:volumechange', () => {

@@ -1159,23 +1159,9 @@ const PlayPageClient: FC = () => {
     }
   };
 
-  const titleLayerControl = () => {
-    if (!artPlayerRef.current) return;
+  const titleLayer = () => {
     const titleLayerText = videoTitleRef.current + (totalEpisodes > 0 ? ' - 第' + (currentEpisodeIndexRef.current + 1) + '集' : '');
-    let titleTimeout;
-    if (isShowTitleRef.current) {
-      titleTimeout = setTimeout(() => {
-        isShowTitleRef.current = !isShowTitleRef.current; // 用 ref 记录
-        setIsShowTitle(isShowTitleRef.current); // 反映到 UI
-      }, 5000)
-    } else {
-      if (titleTimeout) {
-        clearInterval(titleTimeout);
-      }
-    }
-
-    //更新显示内容
-    artPlayerRef.current.layers.update({
+    const layer = {
       name: 'titleLayer',
       html: `<div class="artplayer-title"><span class="artplayer-title-content">${titleLayerText}</span></div>`,
       style: {
@@ -1191,7 +1177,25 @@ const PlayPageClient: FC = () => {
         // [新增] 添加 0.5 秒的透明度过渡效果
         transition: 'opacity 0.5s ease',
       },
-    });
+    }
+    return layer;
+  }
+
+  const titleLayerControl = () => {
+    if (!artPlayerRef.current) return;
+    let titleTimeout;
+    if (isShowTitleRef.current) {
+      titleTimeout = setTimeout(() => {
+        isShowTitleRef.current = !isShowTitleRef.current; // 用 ref 记录
+        setIsShowTitle(isShowTitleRef.current); // 反映到 UI
+      }, 5000)
+    } else {
+      if (titleTimeout) {
+        clearInterval(titleTimeout);
+      }
+    }
+    //更新显示内容
+    artPlayerRef.current.layers.update(titleLayer());
   }
 
   useEffect(() => {
@@ -1257,7 +1261,6 @@ const PlayPageClient: FC = () => {
       artPlayerRef.current = null;
     }
 
-    const titleLayerText = videoTitleRef.current + (totalEpisodes > 0 ? ' - 第' + (currentEpisodeIndexRef.current + 1) + '集' : '');
     try {
       // 创建新的播放器实例
       Artplayer.PLAYBACK_RATE = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
@@ -1464,23 +1467,7 @@ const PlayPageClient: FC = () => {
           },
         ],
         layers: [
-          {
-            name: 'titleLayer',
-            html: `<div class="artplayer-title"><span class="artplayer-title-content">${titleLayerText}</span></div>`,
-            style: {
-              position: 'absolute',
-              top: '10px',
-              left: '15px',
-              color: '#fff',
-              fontSize: '14px',
-              textShadow: '0px 1px 2px rgba(0,0,0,0.5)',
-              pointerEvents: 'none',
-              // [新增] 初始状态为可见
-              opacity: '1',
-              // [新增] 添加 0.5 秒的透明度过渡效果
-              transition: 'opacity 0.5s ease',
-            },
-          }
+          titleLayer(),
         ],
       });
       // 监听播放器事件

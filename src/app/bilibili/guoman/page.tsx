@@ -51,7 +51,7 @@ const GuomanPageClient = () => {
 
   return (
     <PageLayout activePath='/bilibili/guoman'>
-      <div className='max-w-[95%] mx-auto mt-8 overflow-visible'>
+      <div className='max-w-[95%] mx-auto mt-12 overflow-visible'>
         {/* 内容网格 */}
         <div className='grid grid-cols-3 gap-x-2 gap-y-12 px-0 sm:px-2 sm:grid-cols-[repeat(auto-fit,minmax(160px,1fr))] sm:gap-x-8 sm:gap-y-20'>
           {

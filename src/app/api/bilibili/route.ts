@@ -24,6 +24,12 @@ const fetchGuoMan = async (coursor: number, type?: string) => {
   if (type !== undefined) {
     url = `https://tv-api-black.vercel.app/api/bilibili?type=${type}&coursor=${coursor}`;
   }
+  if (process.env.NODE_ENV === 'development') {
+    url = `https://api.bilibili.com/pgc/page/web/v3/feed?name=guochuang&coursor=${coursor}}`;
+    if (type !== undefined) {
+      url = `https://api.bilibili.com/pgc/page/web/feed?name=${type}&coursor=${coursor}&new_cursor_status=true`;
+    }
+  }
   console.log('fetch url:', url);
   try {
     const response = await fetch(url, {

@@ -21,7 +21,7 @@ const MobileHeader = ({ showBackButton = false }: MobileHeaderProps) => {
         {/* 左侧：返回按钮和设置按钮 */}
         <div className='flex items-center gap-2'>
           {showBackButton && <BackButton />}
-          <MobileSidebar />
+          {!showBackButton && <MobileSidebar />}
         </div>
 
         {/* 右侧按钮 */}

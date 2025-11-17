@@ -36,7 +36,7 @@ export const MobileSidebar = () => {
       {/* 侧滑栏 */}
       {open && createPortal(
         <div
-          className="fixed top-0 left-0 z-[9999] h-screen w-64 bg-white shadow-xl transform transition-transform duration-300 ease-in-out translate-x-0"
+          className="fixed top-0 left-0 z-[9999] h-screen w-64 bg-white dark:bg-gray-900 shadow-xl transform transition-transform duration-300 ease-in-out translate-x-0"
         >
           <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
             <Link

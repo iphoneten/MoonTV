@@ -1159,7 +1159,7 @@ const PlayPageClient: FC = () => {
     }
   };
 
-  const titleLayer = () => {
+  const titleLayer = (show: boolean) => {
     const titleLayerText = videoTitleRef.current + (totalEpisodes > 0 ? ' - 第' + (currentEpisodeIndexRef.current + 1) + '集' : '');
     const layer = {
       name: 'titleLayer',
@@ -1173,7 +1173,7 @@ const PlayPageClient: FC = () => {
         textShadow: '0px 1px 2px rgba(0,0,0,0.5)',
         pointerEvents: 'none',
         // [新增] 初始状态为可见
-        opacity: (isShowTitleRef.current ? '1' : '0'),
+        opacity: (show ? '1' : '0'),
         // [新增] 添加 0.5 秒的透明度过渡效果
         transition: 'opacity 0.5s ease',
       },
@@ -1181,26 +1181,26 @@ const PlayPageClient: FC = () => {
     return layer;
   }
 
-  const titleLayerControl = () => {
+  const titleLayerControl = (show: boolean) => {
     if (!artPlayerRef.current) return;
-    let titleTimeout;
-    if (isShowTitleRef.current) {
-      titleTimeout = setTimeout(() => {
-        isShowTitleRef.current = !isShowTitleRef.current; // 用 ref 记录
-        setIsShowTitle(isShowTitleRef.current); // 反映到 UI
-      }, 5000)
-    } else {
-      if (titleTimeout) {
-        clearInterval(titleTimeout);
-      }
-    }
+    // let titleTimeout;
+    // if (isShowTitleRef.current) {
+    //   titleTimeout = setTimeout(() => {
+    //     isShowTitleRef.current = !isShowTitleRef.current; // 用 ref 记录
+    //     setIsShowTitle(isShowTitleRef.current); // 反映到 UI
+    //   }, 5000)
+    // } else {
+    //   if (titleTimeout) {
+    //     clearInterval(titleTimeout);
+    //   }
+    // }
     //更新显示内容
-    artPlayerRef.current.layers.update(titleLayer());
+    artPlayerRef.current.layers.update(titleLayer(show));
   }
 
-  useEffect(() => {
-    titleLayerControl();
-  }, [currentEpisodeIndex, videoTitle, isShowTitleRef.current]);
+  // useEffect(() => {
+  //   titleLayerControl();
+  // }, [currentEpisodeIndex, videoTitle, isShowTitleRef.current]);
 
   useEffect(() => {
     if (
@@ -1467,14 +1467,19 @@ const PlayPageClient: FC = () => {
           },
         ],
         layers: [
-          titleLayer(),
+          titleLayer(true),
         ],
       });
       // 监听播放器事件
       artPlayerRef.current.on('ready', () => {
-        titleLayerControl();
+        titleLayerControl(true);
         setError(null);
       });
+
+      artPlayerRef.current.on('control', (state: boolean) => {
+        titleLayerControl(state);
+      })
+
       artPlayerRef.current.on('document:mousemove', () => {
         isShowTitleRef.current = !isShowTitleRef.current; // 用 ref 记录
         setIsShowTitle(isShowTitleRef.current); // 反映到 UI

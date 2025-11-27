@@ -138,12 +138,11 @@ export async function getDoubanCategories(
     const response = await fetch(
       `/api/douban/categories?kind=${kind}&category=${category}&type=${type}&limit=${pageLimit}&start=${pageStart}`
     );
-
     if (!response.ok) {
       throw new Error('获取豆瓣分类数据失败');
     }
-
-    return response.json();
+    const data = await response.json();
+    return data;
   }
 }
 
@@ -178,7 +177,6 @@ export async function fetchDoubanList(
   params: DoubanListParams
 ): Promise<DoubanResult> {
   const { tag, type, pageLimit = 20, pageStart = 0 } = params;
-
   // 验证参数
   if (!tag || !type) {
     throw new Error('tag 和 type 参数不能为空');

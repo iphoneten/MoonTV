@@ -54,7 +54,6 @@ export async function GET(request: Request) {
   const tag = searchParams.get('tag');
   const pageSize = parseInt(searchParams.get('pageSize') || '16');
   const pageStart = parseInt(searchParams.get('pageStart') || '0');
-
   // 验证参数
   if (!type || !tag) {
     return NextResponse.json(

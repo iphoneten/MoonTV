@@ -27,7 +27,12 @@ const fetchGuoMan = async (coursor: number, type?: string) => {
   if (process.env.NODE_ENV === 'development') {
     url = `https://api.bilibili.com/pgc/page/web/v3/feed?name=guochuang&coursor=${coursor}}`;
     if (type !== undefined) {
-      url = `https://api.bilibili.com/pgc/page/web/feed?name=${type}&coursor=${coursor}&new_cursor_status=true`;
+      if (type === 'child') {
+        const page = coursor + 1;
+        url = `https://api.bilibili.com/pgc/season/index/result?style_id=10027&order=1&page=${page}&season_type=4&pagesize=50&type=1`
+      } else {
+        url = `https://api.bilibili.com/pgc/page/web/feed?name=${type}&coursor=${coursor}&new_cursor_status=true`;
+      }
     }
   }
   console.log('fetch url:', url);

@@ -182,7 +182,7 @@ export async function GET(request: Request) {
         list = videos.map((item: BilibiliItem) => ({
           id: item.media_id,
           title: item.title,
-          poster: item.cover,
+          poster: item.cover.replace('http://', 'https://'),
           rate: item.score,
           year: '',
         }))

@@ -12,6 +12,13 @@ interface DoubanApiResponse {
   }>;
 }
 
+interface BilibiliItem {
+  cover: string;
+  media_id: number;
+  title: string;
+  score: string;
+}
+
 async function fetchDoubanData(url: string): Promise<DoubanApiResponse> {
   // 添加超时控制
   const controller = new AbortController();
@@ -43,6 +50,39 @@ async function fetchDoubanData(url: string): Promise<DoubanApiResponse> {
     throw error;
   }
 }
+
+
+async function getBilibiliChild(page: number) {
+  const pageSize = page + 1;
+  const controller = new AbortController();
+
+  const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
+  const fetchOptions = {
+    signal: controller.signal,
+    headers: {
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+      Accept: 'application/json, text/plain, */*',
+    },
+  };
+
+  try {
+    let url = `https://api.bilibili.com/pgc/season/index/result?style_id=10027&order=1&page=${pageSize}&season_type=4&pagesize=50&type=1`;
+    if (process.env.NODE_ENV !== 'development') {
+      url = `https://tv-api-black.vercel.app/api/bilibili?type=child&coursor=${pageSize}`;
+    }
+    const response = await fetch(url, fetchOptions);
+    if (!response.ok) {
+      throw new Error(`HTTP error! Status: ${response.status}`);
+    }
+    const jsonData = await response.json();
+    return jsonData;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    throw error;
+  }
+}
+
 
 export const runtime = 'edge';
 
@@ -89,18 +129,32 @@ export async function GET(request: Request) {
 
   const target = `https://movie.douban.com/j/search_subjects?type=${type}&tag=${tag}&sort=recommend&page_limit=${pageSize}&page_start=${pageStart}`;
 
+  let list: DoubanItem[] = [];
   try {
-    // 调用豆瓣 API
-    const doubanData = await fetchDoubanData(target);
 
-    // 转换数据格式
-    const list: DoubanItem[] = doubanData.subjects.map((item) => ({
-      id: item.id,
-      title: item.title,
-      poster: item.cover,
-      rate: item.rate,
-      year: '',
-    }));
+    if (type === 'tv' && tag === '综艺') {
+      const jsonData = await getBilibiliChild((pageStart / pageSize));
+      const videos = jsonData.data.list;
+      list = videos.map((item: BilibiliItem) => ({
+        id: item.media_id,
+        title: item.title,
+        poster: item.cover.replace('http://', 'https://'),
+        rate: item.score,
+        year: '',
+      }))
+    } else {
+      const doubanData = await fetchDoubanData(target);
+      // 转换数据格式
+      list = doubanData.subjects.map((item) => ({
+        id: item.id,
+        title: item.title,
+        poster: item.cover,
+        rate: item.rate,
+        year: '',
+      }));
+    }
+
+    // 调用豆瓣 API
 
     const response: DoubanResult = {
       code: 200,

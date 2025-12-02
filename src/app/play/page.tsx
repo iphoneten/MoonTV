@@ -48,9 +48,6 @@ const PlayPageClient: FC = () => {
   const [loadingMessage, setLoadingMessage] = useState('正在搜索播放源...');
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<SearchResult | null>(null);
-  const [isShowTitle, setIsShowTitle] = useState(true);
-  const isShowTitleRef = useRef(isShowTitle);
-  // 收藏状态
   const [favorited, setFavorited] = useState(false);
 
   // 跳过片头片尾配置
@@ -1160,7 +1157,7 @@ const PlayPageClient: FC = () => {
   };
 
   const titleLayer = (show: boolean) => {
-    const titleLayerText = videoTitleRef.current + (totalEpisodes > 0 ? ' - 第' + (currentEpisodeIndexRef.current + 1) + '集' : '');
+    const titleLayerText = videoTitleRef.current + (totalEpisodes > 1 ? ' - 第' + (currentEpisodeIndexRef.current + 1) + '集' : '');
     const layer = {
       name: 'titleLayer',
       html: `<div class="artplayer-title"><span class="artplayer-title-content">${titleLayerText}</span></div>`,
@@ -1181,26 +1178,52 @@ const PlayPageClient: FC = () => {
     return layer;
   }
 
-  const titleLayerControl = (show: boolean) => {
+  const updateTitleLayer = (show: boolean) => {
     if (!artPlayerRef.current) return;
-    // let titleTimeout;
-    // if (isShowTitleRef.current) {
-    //   titleTimeout = setTimeout(() => {
-    //     isShowTitleRef.current = !isShowTitleRef.current; // 用 ref 记录
-    //     setIsShowTitle(isShowTitleRef.current); // 反映到 UI
-    //   }, 5000)
-    // } else {
-    //   if (titleTimeout) {
-    //     clearInterval(titleTimeout);
-    //   }
-    // }
-    //更新显示内容
-    artPlayerRef.current.layers.update(titleLayer(show));
-  }
 
-  // useEffect(() => {
-  //   titleLayerControl();
-  // }, [currentEpisodeIndex, videoTitle, isShowTitleRef.current]);
+    const isFullscreen = artPlayerRef.current.fullscreen;
+    const titleText =
+      videoTitleRef.current +
+      (totalEpisodes > 1 ? ` - 第${currentEpisodeIndexRef.current + 1}集` : '');
+
+    if (isFullscreen) {
+      // 全屏：显示 backButton + title
+      artPlayerRef.current.layers.update({
+        name: 'titleLayer',
+        html: `
+          <div class="artplayer-title flex items-center gap-2" style="width:100%; padding:0 10px;">
+            <button class="exit-fullscreen-btn" style="color:white; font-size:14px;">←</button>
+            <span class="artplayer-title-content">${titleText}</span>
+          </div>
+        `,
+        style: {
+          position: 'absolute',
+          top: '10px',
+          left: '0',
+          right: '0',
+          color: '#fff',
+          fontSize: '14px',
+          textShadow: '0px 1px 2px rgba(0,0,0,0.5)',
+          pointerEvents: 'auto',
+          display: 'flex',
+          alignItems: 'center',
+          opacity: show ? '1' : '0',
+          transition: 'opacity 0.3s ease',
+        },
+        mounted: ((el: HTMLElement) => {
+          console.log('titleLayer mounted', el);
+          const backBtn = el.querySelector(".exit-fullscreen-btn") as HTMLElement;
+          backBtn.onclick = () => {
+            artPlayerRef.current.fullscreen = false;
+            artPlayerRef.current.fullscreenWeb = false;
+          };
+        }),
+      });
+    } else {
+      // 非全屏：只显示 titleLayer
+      artPlayerRef.current.layers.update(titleLayer(show));
+    }
+  };
 
   useEffect(() => {
     if (
@@ -1472,18 +1495,21 @@ const PlayPageClient: FC = () => {
       });
       // 监听播放器事件
       artPlayerRef.current.on('ready', () => {
-        titleLayerControl(true);
+        updateTitleLayer(true);
         setError(null);
       });
 
       artPlayerRef.current.on('control', (state: boolean) => {
-        titleLayerControl(state);
+        updateTitleLayer(state);
       })
 
-      artPlayerRef.current.on('document:mousemove', () => {
-        isShowTitleRef.current = !isShowTitleRef.current; // 用 ref 记录
-        setIsShowTitle(isShowTitleRef.current); // 反映到 UI
-      });
+      artPlayerRef.current.on('fullscreen', () => {
+        updateTitleLayer(true);
+      })
+
+      artPlayerRef.current.on('fullscreenWeb', () => {
+        updateTitleLayer(true);
+      })
 
       artPlayerRef.current.on('video:volumechange', () => {
         lastVolumeRef.current = artPlayerRef.current.volume;

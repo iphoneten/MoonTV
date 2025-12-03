@@ -1522,6 +1522,7 @@ const PlayPageClient: FC = () => {
       artPlayerRef.current.on('lock', (state: boolean) => {
         console.info('lock', state);
         isLockedRef.current = state;
+        updateTitleLayer(true);
       });
 
       // 监听视频可播放事件，这时恢复播放进度更可靠

@@ -117,6 +117,7 @@ const PlayPageClient: FC = () => {
   const videoYearRef = useRef(videoYear);
   const detailRef = useRef<SearchResult | null>(detail);
   const currentEpisodeIndexRef = useRef(currentEpisodeIndex);
+  const isLockedRef = useRef(false);
 
   // 同步最新值到 refs
   useEffect(() => {
@@ -464,7 +465,7 @@ const PlayPageClient: FC = () => {
       setSkipConfig(newConfig);
       if (!newConfig.enable && !newConfig.intro_time && !newConfig.outro_time) {
         await deleteSkipConfig(currentSourceRef.current, currentIdRef.current);
-        artPlayerRef.current.setting.update({
+        artPlayerRef.current?.setting.update({
           name: '跳过片头片尾',
           html: '跳过片头片尾',
           switch: skipConfigRef.current.enable,
@@ -477,7 +478,7 @@ const PlayPageClient: FC = () => {
             return !item.switch;
           },
         });
-        artPlayerRef.current.setting.update({
+        artPlayerRef.current?.setting.update({
           name: '设置片头',
           html: '设置片头',
           icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="5" cy="12" r="2" fill="#ffffff"/><path d="M9 12L17 12" stroke="#ffffff" stroke-width="2"/><path d="M17 6L17 18" stroke="#ffffff" stroke-width="2"/></svg>',
@@ -1186,7 +1187,7 @@ const PlayPageClient: FC = () => {
       videoTitleRef.current +
       (totalEpisodes > 1 ? ` - 第${currentEpisodeIndexRef.current + 1}集` : '');
 
-    if (isFullscreen) {
+    if (isFullscreen && !isLockedRef.current) {
       // 全屏：显示 backButton + title
       artPlayerRef.current.layers.update({
         name: 'titleLayer',
@@ -1516,6 +1517,11 @@ const PlayPageClient: FC = () => {
       });
       artPlayerRef.current.on('video:ratechange', () => {
         lastPlaybackRateRef.current = artPlayerRef.current.playbackRate;
+      });
+
+      artPlayerRef.current.on('lock', (state: boolean) => {
+        console.info('lock', state);
+        isLockedRef.current = state;
       });
 
       // 监听视频可播放事件，这时恢复播放进度更可靠

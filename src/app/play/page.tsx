@@ -1214,10 +1214,12 @@ const PlayPageClient: FC = () => {
         mounted: ((el: HTMLElement) => {
           console.log('titleLayer mounted', el);
           const backBtn = el.querySelector(".exit-fullscreen-btn") as HTMLElement;
-          backBtn.onclick = () => {
-            artPlayerRef.current.fullscreen = false;
-            artPlayerRef.current.fullscreenWeb = false;
-          };
+          if (backBtn) {
+            backBtn.onclick = () => {
+              artPlayerRef.current.fullscreen = false;
+              artPlayerRef.current.fullscreenWeb = false;
+            };
+          }
         }),
       });
     } else {

@@ -103,7 +103,6 @@ export async function fetchDoubanCategories(
     }
 
     const doubanData: DoubanCategoryApiResponse = await response.json();
-
     // 转换数据格式
     const list: DoubanItem[] = doubanData.items.map((item) => ({
       id: item.id,

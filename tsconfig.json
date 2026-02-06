@@ -6,7 +6,8 @@
     "skipLibCheck": true,
     "strict": true,
     "forceConsistentCasingInFileNames": true,
-    "noEmit": true,
+    "noEmit": false, // 改为 false，让 TS 生成 JS
+    "sourceMap": true, // 生成 sourcemap
     "esModuleInterop": true,
     "module": "Node16",
     "moduleResolution": "node16",

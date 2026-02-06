@@ -307,7 +307,7 @@ export default function VideoCard({
 
         {/* 操作按钮 */}
         {(config.showHeart || config.showCheckCircle) && (
-          <div className='absolute bottom-3 right-3 flex gap-3 opacity-0 translate-y-2 transition-all duration-300 ease-in-out group-hover:opacity-100 group-hover:translate-y-0'>
+          <div className='absolute bottom-3 right-3 flex gap-3'>
             {config.showCheckCircle && (
               <CheckCircle
                 onClick={handleDeleteRecord}
@@ -344,8 +344,8 @@ export default function VideoCard({
         )}
 
         {/* 年份显示 */}
-        {actualYear && (
-          <div className='absolute bottom-2 right-2 bg-black/70 text-white text-xs font-semibold px-2 py-1 rounded-md shadow-md transition-all duration-300 ease-out group-hover:scale-110'>
+        {!config.showCheckCircle && actualYear && (
+          <div className='absolute bottom-2 left-2 bg-black/70 text-white text-xs font-semibold px-2 py-1 rounded-md shadow-md transition-all duration-300 ease-out group-hover:scale-110'>
             {actualYear}
           </div>
         )}
@@ -390,6 +390,11 @@ export default function VideoCard({
             <div className='absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800'></div>
           </div>
         </div>
+        {/* {actualYear && (
+          <span className='block text-xs text-gray-500 dark:text-gray-400 mt-1'>
+            {actualYear}
+          </span>
+        )} */}
         {config.showSourceName && source_name && (
           <span className='block text-xs text-gray-500 dark:text-gray-400 mt-1'>
             <span className='inline-block border rounded px-2 py-0.5 border-gray-500/60 dark:border-gray-400/60 transition-all duration-300 ease-in-out group-hover:border-green-500/60 group-hover:text-green-600 dark:group-hover:text-green-400'>

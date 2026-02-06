@@ -31,12 +31,12 @@ export async function GET(req: NextRequest) {
   }
 
   const contentType = resp.headers.get('content-type') || 'image/jpeg';
-
   return new Response(resp.body, {
     headers: {
       'Content-Type': contentType,
-      // 可缓存，减轻你自己服务器压力
-      'Cache-Control': 'public, max-age=86400',
+      'Cache-Control': 'public, max-age=15720000, s-maxage=15720000',
+      'CDN-Cache-Control': 'public, s-maxage=15720000',
+      'Vercel-CDN-Cache-Control': 'public, s-maxage=15720000',
     },
   });
 }

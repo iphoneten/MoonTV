@@ -13,6 +13,8 @@ import DoubanCardSkeleton from '@/components/DoubanCardSkeleton';
 import DoubanSelector from '@/components/DoubanSelector';
 import PageLayout from '@/components/PageLayout';
 import VideoCard from '@/components/VideoCard';
+
+import useUIStore from '@/store/UIStore';
 const pageLimit = 50;
 function DoubanPageClient() {
   const searchParams = useSearchParams();
@@ -30,6 +32,13 @@ function DoubanPageClient() {
   const tag = searchParams.get('tag') || '';
   const custom = searchParams.get('custom') === 'true';
   const name = searchParams.get('name') || '';
+
+  const {
+    pageScroll,
+    doubanType,
+    setPageScroll,
+    setDoubanType,
+  } = useUIStore();
 
   // 选择器状态 - 完全独立，不依赖URL参数
   const [primarySelection, setPrimarySelection] = useState<string>(() => {
@@ -56,6 +65,7 @@ function DoubanPageClient() {
   useEffect(() => {
     setSelectorsReady(false);
     setLoading(true); // 立即显示loading状态
+    setDoubanType(type as 'movie' | 'tv' | 'show'); // 更新全局豆瓣类型状态
   }, [type, tag]);
 
   // 当type变化时重置选择器状态
@@ -298,6 +308,38 @@ function DoubanPageClient() {
     const activePath = `/douban${queryString ? `?${queryString}` : ''}`;
     return activePath;
   };
+
+  const srollView = () => {
+    const el = document.getElementById('page-scroll-container');
+    return el;
+  }
+
+  useEffect(() => {
+    const el = srollView();
+    if (!el) return;
+
+    const onScroll = () => {
+      console.log('豆瓣页面滚动位置:', el.scrollTop, getActivePath());
+      setPageScroll('douban', el.scrollTop); // 保存滚动位置到全局状态
+    };
+
+    el.addEventListener('scroll', onScroll);
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    const el = srollView();
+    if (!el) return;
+    // if (type !== doubanType) return; // 只有当类型匹配时才恢复滚动位置    
+    // 恢复滚动位置
+    const scrollTop = pageScroll['douban'] || 0;
+    if (type !== doubanType) {
+      setPageScroll('douban', 0); // 如果类型不匹配，重置滚动位置为0
+    } else {
+      el.scrollTo(0, scrollTop);
+    }
+  }, [pageScroll, type]);
+
 
   return (
     <PageLayout activePath={getActivePath()}>

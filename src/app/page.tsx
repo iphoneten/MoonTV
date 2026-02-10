@@ -23,8 +23,17 @@ import ScrollableRow from '@/components/ScrollableRow';
 import { useSite } from '@/components/SiteProvider';
 import VideoCard from '@/components/VideoCard';
 
+import useUIStore from '@/store/UIStore';
+
 function HomeClient() {
-  const [activeTab, setActiveTab] = useState<'home' | 'favorites'>('home');
+  // const [activeTab, setActiveTab] = useState<'home' | 'favorites'>('home');
+  const {
+    activeTab,
+    pageScroll,
+    setActiveTab,
+    setPageScroll,
+  } = useUIStore();
+
   const [hotMovies, setHotMovies] = useState<DoubanItem[]>([]);
   const [hotTvShows, setHotTvShows] = useState<DoubanItem[]>([]);
   const [hotVarietyShows, setHotVarietyShows] = useState<DoubanItem[]>([]);
@@ -153,6 +162,32 @@ function HomeClient() {
     setShowAnnouncement(false);
     localStorage.setItem('hasSeenAnnouncement', announcement); // 记录已查看弹窗
   };
+
+  const srollView = () => {
+    const el = document.getElementById('page-scroll-container');
+    return el;
+  }
+
+  useEffect(() => {
+    const el = srollView();
+    if (!el) return;
+
+    const onScroll = () => {
+      setPageScroll(activeTab, el.scrollTop); // 保存滚动位置到全局状态
+    };
+
+    el.addEventListener('scroll', onScroll);
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    const el = srollView();
+    if (!el) return;
+
+    // 恢复滚动位置
+    const scrollTop = pageScroll[activeTab] || 0;
+    el.scrollTo(0, scrollTop);
+  });
 
   return (
     <PageLayout>

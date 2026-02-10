@@ -50,8 +50,10 @@ const PageLayout = ({ children, activePath = '/' }: PageLayoutProps) => {
 
           {/* 主内容 */}
           <main
-            className='flex-1 md:min-h-0 mb-14 md:mb-0 pt-16'
+            id="page-scroll-container"
+            className="flex-1 md:min-h-0 mb-14 md:mb-0 pt-16 overflow-y-auto"
             style={{
+              height: '100vh',
               paddingBottom: 'calc(3.5rem + env(safe-area-inset-bottom))',
             }}
           >

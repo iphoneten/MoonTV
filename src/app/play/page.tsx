@@ -27,6 +27,8 @@ import { getVideoResolutionFromM3u8, processImageUrl } from '@/lib/utils';
 import EpisodeSelector from '@/components/EpisodeSelector';
 import PageLayout from '@/components/PageLayout';
 
+import usePlayStore from '@/store/PlayStore';
+
 import ErrorPage from '@/app/play/errorPage';
 import LoadingPage from '@/app/play/loadingPage';
 // 扩展 HTMLVideoElement 类型以支持 hls 属性
@@ -51,26 +53,41 @@ const PlayPageClient: FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<SearchResult | null>(null);
   const [favorited, setFavorited] = useState(false);
+  const [currentId, setCurrentId] = useState(searchParams.get('id') || '');
 
-  // 跳过片头片尾配置
-  const [skipConfig, setSkipConfig] = useState<{
-    enable: boolean;
-    intro_time: number;
-    outro_time: number;
-  }>({
+  // // 跳过片头片尾配置
+  // const [skipConfig, setSkipConfig] = useState<{
+  //   enable: boolean;
+  //   intro_time: number;
+  //   outro_time: number;
+  // }>({
+  //   enable: false,
+  //   intro_time: 0,
+  //   outro_time: 0,
+  // });
+
+  const {
+    playbackSpeed,
+    skipConfigMap,
+    setPlaybackSpeed,
+    setSkipConfigMap,
+  } = usePlayStore();
+  const currentSkipConfig = skipConfigMap[currentId] || {
     enable: false,
     intro_time: 0,
     outro_time: 0,
-  });
-  const skipConfigRef = useRef(skipConfig);
-  useEffect(() => {
-    skipConfigRef.current = skipConfig;
-  }, [
-    skipConfig,
-    skipConfig.enable,
-    skipConfig.intro_time,
-    skipConfig.outro_time,
-  ]);
+  };
+
+  console.log('currentSkipConfig', currentSkipConfig);
+  // const skipConfigRef = useRef<SkipConfig>();
+
+  // useEffect(() => {
+  //   skipConfigRef.current = skipConfigMap[currentId || ''] || {
+  //     enable: false,
+  //     intro_time: 0,
+  //     outro_time: 0,
+  //   };
+  // }, [skipConfigMap, currentId]);
 
   // 跳过检查的时间间隔控制
   const lastSkipCheckRef = useRef(0);
@@ -96,7 +113,6 @@ const PlayPageClient: FC = () => {
   const [currentSource, setCurrentSource] = useState(
     searchParams.get('source') || ''
   );
-  const [currentId, setCurrentId] = useState(searchParams.get('id') || '');
 
   // 搜索所需信息
   const [searchTitle] = useState(searchParams.get('stitle') || '');
@@ -149,7 +165,7 @@ const PlayPageClient: FC = () => {
   // 上次使用的音量，默认 0.7
   const lastVolumeRef = useRef<number>(0.7);
   // 上次使用的播放速率，默认 1.0
-  const lastPlaybackRateRef = useRef<number>(1.0);
+  const lastPlaybackRateRef = useRef<number>(playbackSpeed);
 
   // 换源相关状态
   const [availableSources, setAvailableSources] = useState<SearchResult[]>([]);
@@ -464,16 +480,18 @@ const PlayPageClient: FC = () => {
     if (!currentSourceRef.current || !currentIdRef.current) return;
 
     try {
-      setSkipConfig(newConfig);
+      // setSkipConfig(newConfig);
+      console.log('更新跳过片头片尾配置:', newConfig, currentSourceRef.current, currentIdRef.current);
+      setSkipConfigMap(currentIdRef.current, newConfig);
       if (!newConfig.enable && !newConfig.intro_time && !newConfig.outro_time) {
         await deleteSkipConfig(currentSourceRef.current, currentIdRef.current);
         artPlayerRef.current?.setting.update({
           name: '跳过片头片尾',
           html: '跳过片头片尾',
-          switch: skipConfigRef.current.enable,
+          switch: currentSkipConfig.enable,
           onSwitch: function (item: any) {
             const newConfig = {
-              ...skipConfigRef.current,
+              ...currentSkipConfig,
               enable: !item.switch,
             };
             handleSkipConfigChange(newConfig);
@@ -485,14 +503,14 @@ const PlayPageClient: FC = () => {
           html: '设置片头',
           icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="5" cy="12" r="2" fill="#ffffff"/><path d="M9 12L17 12" stroke="#ffffff" stroke-width="2"/><path d="M17 6L17 18" stroke="#ffffff" stroke-width="2"/></svg>',
           tooltip:
-            skipConfigRef.current.intro_time === 0
+            currentSkipConfig.intro_time === 0
               ? '设置片头时间'
-              : `${formatTime(skipConfigRef.current.intro_time)}`,
+              : `${formatTime(currentSkipConfig.intro_time)}`,
           onClick: function () {
             const currentTime = artPlayerRef.current?.currentTime || 0;
             if (currentTime > 0) {
               const newConfig = {
-                ...skipConfigRef.current,
+                ...currentSkipConfig,
                 intro_time: currentTime,
               };
               handleSkipConfigChange(newConfig);
@@ -505,9 +523,9 @@ const PlayPageClient: FC = () => {
           html: '设置片尾',
           icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M7 6L7 18" stroke="#ffffff" stroke-width="2"/><path d="M7 12L15 12" stroke="#ffffff" stroke-width="2"/><circle cx="19" cy="12" r="2" fill="#ffffff"/></svg>',
           tooltip:
-            skipConfigRef.current.outro_time >= 0
+            currentSkipConfig.outro_time >= 0
               ? '设置片尾时间'
-              : `-${formatTime(-skipConfigRef.current.outro_time)}`,
+              : `-${formatTime(-currentSkipConfig.outro_time)}`,
           onClick: function () {
             const outroTime =
               -(
@@ -516,7 +534,7 @@ const PlayPageClient: FC = () => {
               ) || 0;
             if (outroTime < 0) {
               const newConfig = {
-                ...skipConfigRef.current,
+                ...currentSkipConfig,
                 outro_time: outroTime,
               };
               handleSkipConfigChange(newConfig);
@@ -525,11 +543,12 @@ const PlayPageClient: FC = () => {
           },
         });
       } else {
-        await saveSkipConfig(
-          currentSourceRef.current,
-          currentIdRef.current,
-          newConfig
-        );
+        // await saveSkipConfig(
+        //   currentSourceRef.current,
+        //   currentIdRef.current,
+        //   newConfig
+        // );
+        setSkipConfigMap(currentIdRef.current, newConfig);
       }
       console.log('跳过片头片尾配置已保存:', newConfig);
     } catch (err) {
@@ -734,7 +753,7 @@ const PlayPageClient: FC = () => {
       // 短暂延迟让用户看到完成状态
       setTimeout(() => {
         setLoading(false);
-      }, 1000);
+      }, 500);
     };
 
     initAll();
@@ -780,14 +799,16 @@ const PlayPageClient: FC = () => {
       try {
         const config = await getSkipConfig(currentSource, currentId);
         if (config) {
-          setSkipConfig(config);
+          // setSkipConfig(config);
+          console.log('读取到跳过片头片尾配置:', config);
+          setSkipConfigMap(currentId, config);
         }
       } catch (err) {
         console.error('读取跳过片头片尾配置失败:', err);
       }
     };
 
-    initSkipConfig();
+    // initSkipConfig();
   }, []);
 
   // 处理换源
@@ -825,7 +846,7 @@ const PlayPageClient: FC = () => {
             currentSourceRef.current,
             currentIdRef.current
           );
-          await saveSkipConfig(newSource, newId, skipConfigRef.current);
+          await saveSkipConfig(newSource, newId, currentSkipConfig);
         } catch (err) {
           console.error('清除跳过片头片尾配置失败:', err);
         }
@@ -1382,10 +1403,10 @@ const PlayPageClient: FC = () => {
             {
               name: '跳过片头片尾',
               html: '跳过片头片尾',
-              switch: skipConfigRef.current.enable,
+              switch: currentSkipConfig.enable,
               onSwitch: function (item) {
                 const newConfig = {
-                  ...skipConfigRef.current,
+                  ...currentSkipConfig,
                   enable: !item.switch,
                 };
                 handleSkipConfigChange(newConfig);
@@ -1408,14 +1429,14 @@ const PlayPageClient: FC = () => {
               html: '设置片头',
               icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="5" cy="12" r="2" fill="#ffffff"/><path d="M9 12L17 12" stroke="#ffffff" stroke-width="2"/><path d="M17 6L17 18" stroke="#ffffff" stroke-width="2"/></svg>',
               tooltip:
-                skipConfigRef.current.intro_time === 0
+                currentSkipConfig.intro_time === 0
                   ? '设置片头时间'
-                  : `${formatTime(skipConfigRef.current.intro_time)}`,
+                  : `${formatTime(currentSkipConfig.intro_time)}`,
               onClick: function () {
                 const currentTime = artPlayerRef.current?.currentTime || 0;
                 if (currentTime > 0) {
                   const newConfig = {
-                    ...skipConfigRef.current,
+                    ...currentSkipConfig,
                     intro_time: currentTime,
                   };
                   handleSkipConfigChange(newConfig);
@@ -1428,9 +1449,9 @@ const PlayPageClient: FC = () => {
               html: '设置片尾',
               icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M7 6L7 18" stroke="#ffffff" stroke-width="2"/><path d="M7 12L15 12" stroke="#ffffff" stroke-width="2"/><circle cx="19" cy="12" r="2" fill="#ffffff"/></svg>',
               tooltip:
-                skipConfigRef.current.outro_time >= 0
+                currentSkipConfig.outro_time >= 0
                   ? '设置片尾时间'
-                  : `-${formatTime(-skipConfigRef.current.outro_time)}`,
+                  : `-${formatTime(-currentSkipConfig.outro_time)}`,
               onClick: function () {
                 const outroTime =
                   -(
@@ -1439,7 +1460,7 @@ const PlayPageClient: FC = () => {
                   ) || 0;
                 if (outroTime < 0) {
                   const newConfig = {
-                    ...skipConfigRef.current,
+                    ...currentSkipConfig,
                     outro_time: outroTime,
                   };
                   handleSkipConfigChange(newConfig);
@@ -1481,7 +1502,8 @@ const PlayPageClient: FC = () => {
           lastVolumeRef.current = artPlayerRef.current.volume;
         });
         artPlayerRef.current.on('video:ratechange', () => {
-          lastPlaybackRateRef.current = artPlayerRef.current.playbackRate;
+          // lastPlaybackRateRef.current = artPlayerRef.current.playbackRate;
+          setPlaybackSpeed(artPlayerRef.current.playbackRate);
         });
         artPlayerRef.current.on('lock', (state: boolean) => {
           console.info('lock', state);
@@ -1521,7 +1543,7 @@ const PlayPageClient: FC = () => {
           setIsVideoLoading(false);
         });
         artPlayerRef.current.on('video:timeupdate', () => {
-          if (!skipConfigRef.current.enable) return;
+          if (!currentSkipConfig.enable) return;
           const currentTime = artPlayerRef.current.currentTime || 0;
           const duration = artPlayerRef.current.duration || 0;
           const now = Date.now();
@@ -1529,20 +1551,20 @@ const PlayPageClient: FC = () => {
           lastSkipCheckRef.current = now;
           // 跳过片头
           if (
-            skipConfigRef.current.intro_time > 0 &&
-            currentTime < skipConfigRef.current.intro_time
+            currentSkipConfig.intro_time > 0 &&
+            currentTime < currentSkipConfig.intro_time
           ) {
-            artPlayerRef.current.currentTime = skipConfigRef.current.intro_time;
+            artPlayerRef.current.currentTime = currentSkipConfig.intro_time;
             artPlayerRef.current.notice.show = `已跳过片头 (${formatTime(
-              skipConfigRef.current.intro_time
+              currentSkipConfig.intro_time
             )})`;
           }
           // 跳过片尾
           if (
-            skipConfigRef.current.outro_time < 0 &&
+            currentSkipConfig.outro_time < 0 &&
             duration > 0 &&
             currentTime >
-            artPlayerRef.current.duration + skipConfigRef.current.outro_time
+            artPlayerRef.current.duration + currentSkipConfig.outro_time
           ) {
             if (
               currentEpisodeIndexRef.current <
@@ -1553,7 +1575,7 @@ const PlayPageClient: FC = () => {
               artPlayerRef.current.pause();
             }
             artPlayerRef.current.notice.show = `已跳过片尾 (${formatTime(
-              skipConfigRef.current.outro_time
+              currentSkipConfig.outro_time
             )})`;
           }
         });
@@ -1629,6 +1651,42 @@ const PlayPageClient: FC = () => {
     };
     // 依赖项：Artplayer, Hls, videoUrl, loading, blockAdEnabled, videoCover, videoTitle, currentEpisodeIndex
   }, [Artplayer, Hls, videoUrl, loading, blockAdEnabled, videoCover, videoTitle, currentEpisodeIndex]);
+
+  useEffect(() => {
+    if (artPlayerRef.current) {
+      // 获取当前播放时间
+      const currentTime = artPlayerRef.current.currentTime;
+      // 如果配置启用且播放时间还在片头部分
+      if (
+        currentSkipConfig.enable &&
+        currentTime < currentSkipConfig.intro_time
+      ) {
+        // 跳过片头
+        artPlayerRef.current.currentTime = currentSkipConfig.intro_time;
+        artPlayerRef.current.notice.show = `已跳过片头 (${formatTime(currentSkipConfig.intro_time)})`;
+      }
+
+      // 跳过片尾
+      if (
+        currentSkipConfig.outro_time < 0 &&
+        (currentTime >
+          (artPlayerRef.current.duration + currentSkipConfig.outro_time))
+      ) {
+        if (
+          currentEpisodeIndexRef.current <
+          (detailRef.current?.episodes?.length || 1) - 1
+        ) {
+          handleNextEpisode();
+        } else {
+          artPlayerRef.current.pause();
+        }
+        artPlayerRef.current.notice.show = `已跳过片尾 (${formatTime(
+          currentSkipConfig.outro_time
+        )})`;
+      }
+
+    }
+  }, [artPlayerRef.current?.currentTime]);
 
   // 当组件卸载时清理定时器
   useEffect(() => {

@@ -1,6 +1,6 @@
 'use client';
 
-import router from "next/router";
+import { useRouter } from "next/navigation";
 import { FC } from "react";
 
 import PageLayout from "@/components/PageLayout";
@@ -12,8 +12,9 @@ interface ErrorPageProps {
 
 const ErrorPage: FC<ErrorPageProps> = ({
   error,
-  videoTitle
+  videoTitle,
 }) => {
+  const router = useRouter();
   return (
     <PageLayout activePath='/play'>
       <div className='flex items-center justify-center min-h-screen bg-transparent'>

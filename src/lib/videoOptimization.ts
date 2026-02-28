@@ -115,10 +115,12 @@ export const preferBestSource = async (
 
   // 1. 检查缓存逻辑
   // 如果所有 sources 都在缓存中，直接返回
-  const allInCache = sources.every(s => sessionSpeedCache.has(`${s.source}-${s.id}`));
+  const allInCache = sources.every((s) =>
+    sessionSpeedCache.has(`${s.source}-${s.id}`)
+  );
   if (allInCache && sources.length > 0) {
     console.log('检测到全量测速缓存，跳过实时测试');
-    sources.forEach(s => {
+    sources.forEach((s) => {
       const data = sessionSpeedCache.get(`${s.source}-${s.id}`);
       newVideoInfoMap.set(`${s.source}-${s.id}`, data.testResult);
     });
@@ -135,8 +137,11 @@ export const preferBestSource = async (
   const isPerfectSource = (res: any) => {
     if (!res) return false;
     const { quality, avgSpeed, pingTime, tsSuccessRate } = res;
-    const isHighQuality = quality === '4K' || quality === '2K' || quality === '1080p';
-    return isHighQuality && avgSpeed > 3072 && pingTime < 300 && tsSuccessRate >= 0.8;
+    const isHighQuality =
+      quality === '4K' || quality === '2K' || quality === '1080p';
+    return (
+      isHighQuality && avgSpeed > 3072 && pingTime < 300 && tsSuccessRate >= 0.8
+    );
   };
 
   const results: any[] = [];
@@ -154,7 +159,8 @@ export const preferBestSource = async (
     if (!source.episodes || source.episodes.length === 0) return null;
 
     // 取第一集或第二集测试
-    const episodeUrl = source.episodes.length > 1 ? source.episodes[1] : source.episodes[0];
+    const episodeUrl =
+      source.episodes.length > 1 ? source.episodes[1] : source.episodes[0];
     const qualities: string[] = [];
     const speeds: number[] = [];
     const pings: number[] = [];
@@ -165,7 +171,11 @@ export const preferBestSource = async (
       try {
         const result = await getVideoResolutionFromM3u8(episodeUrl);
         if (result.quality) qualities.push(result.quality);
-        if (result.loadSpeed && result.loadSpeed !== '未知' && result.loadSpeed !== '测量中...') {
+        if (
+          result.loadSpeed &&
+          result.loadSpeed !== '未知' &&
+          result.loadSpeed !== '测量中...'
+        ) {
           const match = result.loadSpeed.match(/^([\d.]+)\s*(KB\/s|MB\/s)$/);
           if (match) {
             let v = parseFloat(match[1]);
@@ -173,32 +183,54 @@ export const preferBestSource = async (
             speeds.push(v);
           }
         }
-        if (typeof result.pingTime === 'number' && result.pingTime > 0) pings.push(result.pingTime);
+        if (typeof result.pingTime === 'number' && result.pingTime > 0)
+          pings.push(result.pingTime);
 
-        if (!tsSuccessChecked && Array.isArray(result.tsUrls) && result.tsUrls.length > 0) {
+        if (
+          !tsSuccessChecked &&
+          Array.isArray(result.tsUrls) &&
+          result.tsUrls.length > 0
+        ) {
           tsSuccessChecked = true;
           let ok = 0;
           const total = Math.min(result.tsUrls.length, TS_SUCCESS_SAMPLE_COUNT);
-          await Promise.all(result.tsUrls.slice(0, total).map(async (tsUrl: string) => {
-            try {
-              const resp = await fetch(tsUrl, { method: 'HEAD', signal: AbortSignal.timeout(TS_SUCCESS_TIMEOUT) });
-              if (resp.ok) ok += 1;
-            } catch { /* ignore */ }
-          }));
+          await Promise.all(
+            result.tsUrls.slice(0, total).map(async (tsUrl: string) => {
+              try {
+                const resp = await fetch(tsUrl, {
+                  method: 'HEAD',
+                  signal: AbortSignal.timeout(TS_SUCCESS_TIMEOUT),
+                });
+                if (resp.ok) ok += 1;
+              } catch {
+                /* ignore */
+              }
+            })
+          );
           tsSuccessRate = ok / total;
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
 
     const finalResult = {
       source,
       testResult: {
         quality: qualities[0] || '未知',
-        loadSpeed: speeds.length > 0 ? (speeds[0] >= 1024 ? `${(speeds[0] / 1024).toFixed(1)} MB/s` : `${speeds[0].toFixed(1)} KB/s`) : '未知',
+        loadSpeed:
+          speeds.length > 0
+            ? speeds[0] >= 1024
+              ? `${(speeds[0] / 1024).toFixed(1)} MB/s`
+              : `${speeds[0].toFixed(1)} KB/s`
+            : '未知',
         pingTime: pings.length > 0 ? Math.min(...pings) : 0,
-        avgSpeed: speeds.length > 0 ? speeds.reduce((a, b) => a + b, 0) / speeds.length : 0,
+        avgSpeed:
+          speeds.length > 0
+            ? speeds.reduce((a, b) => a + b, 0) / speeds.length
+            : 0,
         tsSuccessRate: tsSuccessChecked ? tsSuccessRate : 1,
-      }
+      },
     };
 
     // 存入缓存
@@ -214,37 +246,55 @@ export const preferBestSource = async (
   for (let i = 0; i < sources.length; i += CONCURRENT_COUNT) {
     if (foundPerfect) break;
     const batch = sources.slice(i, i + CONCURRENT_COUNT);
-    const batchResults = await Promise.all(batch.map(s => testSource(s)));
+    const batchResults = await Promise.all(batch.map((s) => testSource(s)));
     results.push(...batchResults.filter(Boolean));
   }
 
   // 构造返回 Map
-  results.forEach(r => {
+  results.forEach((r) => {
     newVideoInfoMap.set(`${r.source.source}-${r.source.id}`, r.testResult);
   });
 
   if (results.length === 0) {
-    return { bestSource: sources[0], precomputedVideoInfo: newVideoInfoMap, sortedAvailableSources: availableSources };
+    return {
+      bestSource: sources[0],
+      precomputedVideoInfo: newVideoInfoMap,
+      sortedAvailableSources: availableSources,
+    };
   }
 
   // 计算和排序
-  const validSpeeds = results.map(r => r.testResult.avgSpeed).filter(v => v > 0);
+  const validSpeeds = results
+    .map((r) => r.testResult.avgSpeed)
+    .filter((v) => v > 0);
   const maxSpeed = validSpeeds.length > 0 ? Math.max(...validSpeeds) : 1024;
-  const validPings = results.map(r => r.testResult.pingTime).filter(p => p > 0);
+  const validPings = results
+    .map((r) => r.testResult.pingTime)
+    .filter((p) => p > 0);
   const minPing = validPings.length > 0 ? Math.min(...validPings) : 50;
   const maxPing = validPings.length > 0 ? Math.max(...validPings) : 1000;
 
-  const resultsWithScore = results.map(r => {
+  const resultsWithScore = results.map((r) => {
     const tsPenalty = r.testResult.tsSuccessRate < 0.8 ? 0.5 : 1;
-    let score = calculateSourceScore(r.testResult, maxSpeed, minPing, maxPing);
+    const score = calculateSourceScore(
+      r.testResult,
+      maxSpeed,
+      minPing,
+      maxPing
+    );
     return { ...r, score: score * tsPenalty };
   });
 
   resultsWithScore.sort((a, b) => b.score - a.score);
 
   const bestSource = resultsWithScore[0].source;
-  const successSources = resultsWithScore.map(r => r.source);
-  const otherSources = availableSources.filter(s => !successSources.find(success => success.source === s.source && success.id === s.id));
+  const successSources = resultsWithScore.map((r) => r.source);
+  const otherSources = availableSources.filter(
+    (s) =>
+      !successSources.find(
+        (success) => success.source === s.source && success.id === s.id
+      )
+  );
 
   return {
     bestSource,

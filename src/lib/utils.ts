@@ -96,12 +96,13 @@ export function cleanHtmlTags(text: string): string {
 /**
  * 从m3u8地址获取视频质量等级和网络信息
  * @param m3u8Url m3u8播放列表的URL
- * @returns Promise<{quality: string, loadSpeed: string, pingTime: number}> 视频质量等级和网络信息
+ * @returns Promise<{quality: string, loadSpeed: string, pingTime: number, tsUrls?: string[]}> 视频质量等级和网络信息
  */
 export async function getVideoResolutionFromM3u8(m3u8Url: string): Promise<{
   quality: string; // 如720p、1080p等
   loadSpeed: string; // 自动转换为KB/s或MB/s
   pingTime: number; // 网络延迟（毫秒）
+  tsUrls?: string[];
 }> {
   try {
     // 直接使用m3u8 URL作为视频源，避免CORS问题
@@ -146,6 +147,8 @@ export async function getVideoResolutionFromM3u8(m3u8Url: string): Promise<{
 
       let fragmentStartTime = 0;
 
+      const tsUrls: string[] = [];
+
       // 检查是否可以返回结果
       const checkAndResolve = () => {
         if (
@@ -176,6 +179,7 @@ export async function getVideoResolutionFromM3u8(m3u8Url: string): Promise<{
               quality,
               loadSpeed: actualLoadSpeed,
               pingTime: Math.round(pingTime),
+              tsUrls,
             });
           } else {
             // webkit 无法获取尺寸，直接返回
@@ -183,14 +187,18 @@ export async function getVideoResolutionFromM3u8(m3u8Url: string): Promise<{
               quality: '未知',
               loadSpeed: actualLoadSpeed,
               pingTime: Math.round(pingTime),
+              tsUrls,
             });
           }
         }
       };
 
-      // 监听片段加载开始
-      hls.on(Hls.Events.FRAG_LOADING, () => {
+      // 监听片段加载开始，收集 ts 分片 URL
+      hls.on(Hls.Events.FRAG_LOADING, (event: any, data: any) => {
         fragmentStartTime = performance.now();
+        if (data && data.url && !tsUrls.includes(data.url)) {
+          tsUrls.push(data.url);
+        }
       });
 
       // 监听片段加载完成，只需首个分片即可计算速度
@@ -248,3 +256,28 @@ export async function getVideoResolutionFromM3u8(m3u8Url: string): Promise<{
     );
   }
 }
+
+/**
+ * 格式化秒数为时间字符串
+ * @param seconds 秒数
+ * @returns 格式化后的时间字符串 (如 00:00 或 00:00:00)
+ */
+export const formatTime = (seconds: number): string => {
+  if (seconds === 0) return '00:00';
+
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainingSeconds = Math.round(seconds % 60);
+
+  if (hours === 0) {
+    // 不到一小时，格式为 00:00
+    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds
+      .toString()
+      .padStart(2, '0')}`;
+  } else {
+    // 超过一小时，格式为 00:00:00
+    return `${hours.toString().padStart(2, '0')}:${minutes
+      .toString()
+      .padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+  }
+};

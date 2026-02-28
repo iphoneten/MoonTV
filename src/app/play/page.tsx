@@ -1315,11 +1315,6 @@ const PlayPageClient: FC = () => {
               }
               const hls = new Hls({
                 ...getHlsConfig(blockAdEnabledRef.current),
-                maxBufferLength: 30,
-                backBufferLength: 30,
-                maxBufferSize: 100 * 1024 * 1024, // 100MB
-                testBandwidth: true,
-                maxBufferHole: 0.5,
               });
 
               hls.loadSource(url);

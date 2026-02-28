@@ -83,7 +83,10 @@ export type PrecomputedVideoInfo = Map<
   }
 >;
 
-// 播放源优选函数（生产级多次采样测速 + TS 成功率和播放成功重置逻辑）
+// 会话级缓存，避免单次打开页面重复测速
+const sessionSpeedCache: Map<string, any> = new Map();
+
+// 播放源优选函数（生产级多次采样测速 + TS 成功率 + 缓存 + 并发优化 + 早停逻辑）
 export const preferBestSource = async (
   sources: SearchResult[],
   availableSources: SearchResult[]
@@ -94,6 +97,14 @@ export const preferBestSource = async (
 }> => {
   const newVideoInfoMap: PrecomputedVideoInfo = new Map();
 
+  if (sources.length === 0) {
+    return {
+      bestSource: sources[0], // fallback
+      precomputedVideoInfo: newVideoInfoMap,
+      sortedAvailableSources: availableSources,
+    };
+  }
+
   if (sources.length === 1) {
     return {
       bestSource: sources[0],
@@ -102,229 +113,142 @@ export const preferBestSource = async (
     };
   }
 
-  // 生产级多次采样测速参数
-  const TEST_ROUNDS = 3;
-  const TS_SUCCESS_SAMPLE_COUNT = 5; // 检查前5个TS分片
-  const TS_SUCCESS_TIMEOUT = 3000; // 每个分片最大超时
+  // 1. 检查缓存逻辑
+  // 如果所有 sources 都在缓存中，直接返回
+  const allInCache = sources.every(s => sessionSpeedCache.has(`${s.source}-${s.id}`));
+  if (allInCache && sources.length > 0) {
+    console.log('检测到全量测速缓存，跳过实时测试');
+    sources.forEach(s => {
+      const data = sessionSpeedCache.get(`${s.source}-${s.id}`);
+      newVideoInfoMap.set(`${s.source}-${s.id}`, data.testResult);
+    });
+    // 复用之前的评分逻辑进行排序... 为了简洁，这里直接进入下面的通用流也能处理缓存
+  }
 
-  // 测试单个播放源，返回测速综合信息
+  // 生产级多次采样测速参数
+  const TEST_ROUNDS = 2; // 减少轮数至2轮，权衡准确度与速度
+  const TS_SUCCESS_SAMPLE_COUNT = 3; // 减少采样分片数
+  const TS_SUCCESS_TIMEOUT = 2500;
+  const CONCURRENT_COUNT = 4; // 增加并发数
+
+  // 定义“完美源”标准：1080p及以上，速度 > 3MB/s，延迟 < 300ms
+  const isPerfectSource = (res: any) => {
+    if (!res) return false;
+    const { quality, avgSpeed, pingTime, tsSuccessRate } = res;
+    const isHighQuality = quality === '4K' || quality === '2K' || quality === '1080p';
+    return isHighQuality && avgSpeed > 3072 && pingTime < 300 && tsSuccessRate >= 0.8;
+  };
+
+  const results: any[] = [];
+  let foundPerfect = false;
+
+  // 测试单个播放源
   async function testSource(source: SearchResult) {
-    if (!source.episodes || source.episodes.length === 0) {
-      return null;
+    if (foundPerfect) return null;
+
+    const cacheKey = `${source.source}-${source.id}`;
+    if (sessionSpeedCache.has(cacheKey)) {
+      return sessionSpeedCache.get(cacheKey);
     }
-    const episodeUrl =
-      source.episodes.length > 1 ? source.episodes[1] : source.episodes[0];
-    // 多次测速取均值
+
+    if (!source.episodes || source.episodes.length === 0) return null;
+
+    // 取第一集或第二集测试
+    const episodeUrl = source.episodes.length > 1 ? source.episodes[1] : source.episodes[0];
     const qualities: string[] = [];
     const speeds: number[] = [];
     const pings: number[] = [];
-    const speedLabels: string[] = [];
     let tsSuccessRate = 0;
     let tsSuccessChecked = false;
-    let lastResult: any = null;
+
     for (let i = 0; i < TEST_ROUNDS; i++) {
       try {
-        // getVideoResolutionFromM3u8 返回 {quality, loadSpeed, pingTime, tsUrls?}
         const result = await getVideoResolutionFromM3u8(episodeUrl);
-        lastResult = result;
         if (result.quality) qualities.push(result.quality);
-        // 解析 loadSpeed
         if (result.loadSpeed && result.loadSpeed !== '未知' && result.loadSpeed !== '测量中...') {
           const match = result.loadSpeed.match(/^([\d.]+)\s*(KB\/s|MB\/s)$/);
           if (match) {
             let v = parseFloat(match[1]);
             if (match[2] === 'MB/s') v = v * 1024;
             speeds.push(v);
-            speedLabels.push(result.loadSpeed);
           }
         }
-        if (typeof result.pingTime === 'number' && result.pingTime > 0) {
-          pings.push(result.pingTime);
-        }
-        // 只在第1次测速时检查TS成功率
+        if (typeof result.pingTime === 'number' && result.pingTime > 0) pings.push(result.pingTime);
+
         if (!tsSuccessChecked && Array.isArray(result.tsUrls) && result.tsUrls.length > 0) {
           tsSuccessChecked = true;
           let ok = 0;
           const total = Math.min(result.tsUrls.length, TS_SUCCESS_SAMPLE_COUNT);
-          await Promise.all(
-            result.tsUrls.slice(0, total).map(async (tsUrl: string) => {
-              try {
-                const ctrl = new AbortController();
-                const timeout = setTimeout(() => ctrl.abort(), TS_SUCCESS_TIMEOUT);
-                const resp = await fetch(tsUrl, { method: 'HEAD', signal: ctrl.signal });
-                clearTimeout(timeout);
-                // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-                // @ts-ignore
-                if (resp.ok) ok += 1;
-              } catch { /* ignore */ }
-            })
-          );
-          tsSuccessRate = total > 0 ? ok / total : 0;
+          await Promise.all(result.tsUrls.slice(0, total).map(async (tsUrl: string) => {
+            try {
+              const resp = await fetch(tsUrl, { method: 'HEAD', signal: AbortSignal.timeout(TS_SUCCESS_TIMEOUT) });
+              if (resp.ok) ok += 1;
+            } catch { /* ignore */ }
+          }));
+          tsSuccessRate = ok / total;
         }
-      } catch (e) {
-        // ignore
-      }
+      } catch { /* ignore */ }
     }
-    // 取众数或均值
-    const quality =
-      qualities.length > 0
-        ? qualities.sort(
-          (a, b) =>
-            qualities.filter((v) => v === b).length -
-            qualities.filter((v) => v === a).length
-        )[0]
-        : lastResult?.quality || '未知';
-    const avgSpeed =
-      speeds.length > 0
-        ? speeds.reduce((a, b) => a + b, 0) / speeds.length
-        : 0;
-    const speedLabel =
-      speedLabels.length > 0
-        ? speedLabels.sort(
-          (a, b) =>
-            speedLabels.filter((v) => v === b).length -
-            speedLabels.filter((v) => v === a).length
-        )[0]
-        : lastResult?.loadSpeed || '未知';
-    const avgPing =
-      pings.length > 0
-        ? Math.round(
-          pings.reduce((a, b) => a + b, 0) / pings.length
-        )
-        : lastResult?.pingTime || 0;
-    return {
+
+    const finalResult = {
       source,
       testResult: {
-        quality,
-        loadSpeed: speedLabel,
-        pingTime: avgPing,
-        avgSpeed,
+        quality: qualities[0] || '未知',
+        loadSpeed: speeds.length > 0 ? (speeds[0] >= 1024 ? `${(speeds[0] / 1024).toFixed(1)} MB/s` : `${speeds[0].toFixed(1)} KB/s`) : '未知',
+        pingTime: pings.length > 0 ? Math.min(...pings) : 0,
+        avgSpeed: speeds.length > 0 ? speeds.reduce((a, b) => a + b, 0) / speeds.length : 0,
         tsSuccessRate: tsSuccessChecked ? tsSuccessRate : 1,
-      },
+      }
     };
-  }
 
-  // 批量测速，分批进行避免并发过多
-  const batchSize = Math.ceil(sources.length / 2);
-  const allResults: Array<{
-    source: SearchResult;
-    testResult: {
-      quality: string;
-      loadSpeed: string;
-      pingTime: number;
-      avgSpeed?: number;
-      tsSuccessRate?: number;
-    };
-  } | null> = [];
+    // 存入缓存
+    sessionSpeedCache.set(cacheKey, finalResult);
 
-  for (let start = 0; start < sources.length; start += batchSize) {
-    const batchSources = sources.slice(start, start + batchSize);
-    const batchResults = await Promise.all(
-      batchSources.map((source) => testSource(source))
-    );
-    allResults.push(...batchResults);
-  }
-
-  // 构造 precomputedVideoInfo
-  allResults.forEach((result, index) => {
-    const source = sources[index];
-    const sourceKey = `${source.source}-${source.id}`;
-    if (result) {
-      newVideoInfoMap.set(sourceKey, result.testResult);
+    if (isPerfectSource(finalResult.testResult)) {
+      foundPerfect = true;
     }
+    return finalResult;
+  }
+
+  // 分批并发测速
+  for (let i = 0; i < sources.length; i += CONCURRENT_COUNT) {
+    if (foundPerfect) break;
+    const batch = sources.slice(i, i + CONCURRENT_COUNT);
+    const batchResults = await Promise.all(batch.map(s => testSource(s)));
+    results.push(...batchResults.filter(Boolean));
+  }
+
+  // 构造返回 Map
+  results.forEach(r => {
+    newVideoInfoMap.set(`${r.source.source}-${r.source.id}`, r.testResult);
   });
 
-  // 只保留测速成功的
-  const successfulResults = allResults.filter(Boolean) as Array<{
-    source: SearchResult;
-    testResult: {
-      quality: string;
-      loadSpeed: string;
-      pingTime: number;
-      avgSpeed?: number;
-      tsSuccessRate?: number;
-    };
-  }>;
-
-  let bestSource = sources[0];
-  let sortedAvailableSources = [...availableSources];
-
-  if (successfulResults.length === 0) {
-    console.warn('所有播放源测速都失败，使用第一个播放源');
-    return {
-      bestSource,
-      precomputedVideoInfo: newVideoInfoMap,
-      sortedAvailableSources,
-    };
+  if (results.length === 0) {
+    return { bestSource: sources[0], precomputedVideoInfo: newVideoInfoMap, sortedAvailableSources: availableSources };
   }
 
-  // 统计最大速度和延迟区间
-  const validSpeeds = successfulResults
-    .map((r) => r.testResult.avgSpeed || 0)
-    .filter((v) => v > 0);
+  // 计算和排序
+  const validSpeeds = results.map(r => r.testResult.avgSpeed).filter(v => v > 0);
   const maxSpeed = validSpeeds.length > 0 ? Math.max(...validSpeeds) : 1024;
-  const validPings = successfulResults
-    .map((r) => r.testResult.pingTime)
-    .filter((p) => p > 0);
+  const validPings = results.map(r => r.testResult.pingTime).filter(p => p > 0);
   const minPing = validPings.length > 0 ? Math.min(...validPings) : 50;
   const maxPing = validPings.length > 0 ? Math.max(...validPings) : 1000;
 
-  // 计算综合评分
-  const resultsWithScore = successfulResults.map((result) => {
-    // TS分片成功率低于0.8的直接降权
-    const tsRate = typeof result.testResult.tsSuccessRate === 'number'
-      ? result.testResult.tsSuccessRate
-      : 1;
-    const tsPenalty = tsRate < 0.8 ? 0.5 : 1;
-    let score = calculateSourceScore(
-      result.testResult,
-      maxSpeed,
-      minPing,
-      maxPing
-    );
-    score = score * tsPenalty;
-    return {
-      ...result,
-      score,
-      tsSuccessRate: tsRate,
-    };
+  const resultsWithScore = results.map(r => {
+    const tsPenalty = r.testResult.tsSuccessRate < 0.8 ? 0.5 : 1;
+    let score = calculateSourceScore(r.testResult, maxSpeed, minPing, maxPing);
+    return { ...r, score: score * tsPenalty };
   });
 
-  // 按综合评分排序
   resultsWithScore.sort((a, b) => b.score - a.score);
 
-  // 打印排序
-  console.log('播放源评分排序结果:');
-  resultsWithScore.forEach((result, index) => {
-    console.log(
-      `${index + 1}. ${result.source.source_name
-      } - 评分: ${result.score.toFixed(2)} (${result.testResult.quality}, ${result.testResult.loadSpeed
-      }, ${result.testResult.pingTime}ms, TS成功率:${(result.tsSuccessRate * 100).toFixed(0)}%)`
-    );
-  });
-
-  // 优先排序availableSources
-  const successSources = resultsWithScore.map((r) => r.source);
-  const otherSources = availableSources.filter((s) => !successSources.includes(s));
-  sortedAvailableSources = [...successSources, ...otherSources];
-
-  // 播放成功重置逻辑：如果最佳源的TS成功率低于0.5，且有其他源TS成功率高的，换用下一个
-  let best = resultsWithScore[0];
-  if (best.tsSuccessRate < 0.5 && resultsWithScore.length > 1) {
-    const next = resultsWithScore.find((r) => r.tsSuccessRate >= 0.8);
-    if (next) {
-      console.warn(
-        `最佳源TS分片成功率过低(${(best.tsSuccessRate * 100).toFixed(0)}%)，切换为${next.source.source_name}`
-      );
-      best = next;
-    }
-  }
-
-  bestSource = best.source;
+  const bestSource = resultsWithScore[0].source;
+  const successSources = resultsWithScore.map(r => r.source);
+  const otherSources = availableSources.filter(s => !successSources.find(success => success.source === s.source && success.id === s.id));
 
   return {
     bestSource,
     precomputedVideoInfo: newVideoInfoMap,
-    sortedAvailableSources,
+    sortedAvailableSources: [...successSources, ...otherSources],
   };
 };

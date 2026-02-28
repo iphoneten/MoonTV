@@ -282,7 +282,7 @@ const PlayPageClient: FC = () => {
     enable: boolean;
     intro_time: number;
     outro_time: number;
-  }, fromSwitch: boolean = false) => {
+  }, fromSwitch = false) => {
     if (!currentSourceRef.current || !currentIdRef.current) return;
 
     try {

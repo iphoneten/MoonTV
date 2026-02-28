@@ -378,10 +378,10 @@ const PlayPageClient: FC = () => {
     ): Promise<SearchResult[]> => {
       try {
         const detailResponse = await fetch(
-          `/api/detail?source=${source}&id=${id}`
+          `/api/detail?source=${encodeURIComponent(source)}&id=${encodeURIComponent(id)}`
         );
         if (!detailResponse.ok) {
-          throw new Error('获取视频详情失败');
+          throw new Error(`获取详情失败 (状态码: ${detailResponse.status})`);
         }
         const detailData = (await detailResponse.json()) as SearchResult;
         setAvailableSources([detailData]);
@@ -429,135 +429,142 @@ const PlayPageClient: FC = () => {
     };
 
     const initAll = async () => {
-      console.log('初始参数:', {
-        currentSource,
-        currentId,
-        searchTitle,
-        searchType,
-        videoTitle,
-      });
-      if (!currentSource && !currentId && !videoTitle && !searchTitle) {
-        setError('缺少必要参数');
+      // 优先从 URL 参数中直接获取最新值，避免 state 闭包滞后
+      const sParam = searchParams.get('source') || '';
+      const idParam = searchParams.get('id') || '';
+      const sTitleParam = searchParams.get('stitle') || '';
+      const titleParam = searchParams.get('title') || '';
+
+      if (!sParam && !idParam && !titleParam && !sTitleParam) {
+        setError('参数不完整，无法播放');
         setLoading(false);
         return;
       }
+
       setLoading(true);
-      setLoadingStage(currentSource && currentId ? 'fetching' : 'searching');
+      setLoadingStage(sParam && idParam ? 'fetching' : 'searching');
       setLoadingMessage(
-        currentSource && currentId
-          ? '🎬 正在获取视频详情...'
+        sParam && idParam
+          ? '🎬 正在快速进入播放...'
           : '🔍 正在搜索播放源...'
       );
 
-      let sourcesInfo = await fetchSourcesData(searchTitle || videoTitle);
-      if (
-        currentSource &&
-        currentId &&
-        !sourcesInfo.some(
-          (source) => source.source === currentSource && source.id === currentId
-        )
-      ) {
-        sourcesInfo = await fetchSourceDetail(currentSource, currentId);
-      }
-      if (sourcesInfo.length === 0) {
-        setError('未找到匹配结果');
-        setLoading(false);
-        return;
-      }
+      try {
+        let detailData: SearchResult | null = null;
+        let sourcesInfo: SearchResult[] = [];
 
-      let detailData: SearchResult = sourcesInfo[0];
-      // 指定源和id且无需优选
-      if (currentSource && currentId && !needPreferRef.current) {
-        const target = sourcesInfo.find(
-          (source) => source.source === currentSource && source.id === currentId
-        );
-        if (target) {
-          detailData = target;
-        } else {
-          setError('未找到匹配结果');
+        // --- 核心优化：并行执行基础检查 ---
+        const [recordsData, searchResults, targetDetail] = await Promise.all([
+          getAllPlayRecords().catch(() => ({} as Record<string, any>)),
+          // 如果没有现成 ID，或者带了 ID 但我们需要后台静默搜索换源列表
+          (!sParam || !idParam)
+            ? fetchSourcesData(sTitleParam || titleParam)
+            : Promise.resolve([]),
+          // 如果有现成 ID，尝试直接请求详情
+          (sParam && idParam)
+            ? fetchSourceDetail(sParam, idParam).catch((err) => {
+              console.warn('直接获取详情失败，将尝试从搜索结果中恢复:', err);
+              return [];
+            })
+            : Promise.resolve([])
+        ]);
+
+        const records = recordsData as Record<string, any>;
+        sourcesInfo = searchResults;
+
+        // 1. 优先路径：已有 Source 和 ID
+        if (sParam && idParam) {
+          if (targetDetail && targetDetail.length > 0) {
+            detailData = targetDetail[0];
+          }
+
+          // 检查播放记录并准备恢复进度
+          const key = generateStorageKey(sParam, idParam);
+          const record = records[key];
+          if (record) {
+            setCurrentEpisodeIndex(record.index - 1);
+            resumeTimeRef.current = record.play_time;
+          }
+
+          // 如果因为有 ID 所以跳过了初次搜索，现在在后台补齐换源列表
+          if (sourcesInfo.length === 0) {
+            fetchSourcesData(sTitleParam || titleParam).then(res => {
+              if (res.length > 0) setAvailableSources(res);
+            });
+          }
+        }
+
+        // 2. 兜底路径：如果直连详情失败了，或者原本就没有 ID，尝试从搜索结果中寻找
+        if (!detailData) {
+          const finalSources = sourcesInfo.length > 0 ? sourcesInfo : await fetchSourcesData(sTitleParam || titleParam);
+          sourcesInfo = finalSources;
+
+          if (finalSources.length > 0) {
+            // 如果带了 ID，先在搜索结果里找这个 ID
+            const matched = finalSources.find(s => s.source === sParam && s.id === idParam);
+            detailData = matched || finalSources[0];
+
+            // 既然是新找到的源，重新同步一次它的播放记录
+            const key = generateStorageKey(detailData.source, detailData.id);
+            const record = records[key];
+            if (record) {
+              setCurrentEpisodeIndex(record.index - 1);
+              resumeTimeRef.current = record.play_time;
+            }
+          }
+        }
+
+        if (!detailData) {
+          setError('抱歉，未能成功加载视频详情，请尝试刷新或查看其他来源');
           setLoading(false);
           return;
         }
-      }
 
-      // 未指定源和 id 或需要优选，且开启优选开关
-      if (
-        (!currentSource || !currentId || needPreferRef.current) &&
-        optimizationEnabled
-      ) {
-        setLoadingStage('preferring');
-        setLoadingMessage('⚡ 正在优选最佳播放源...');
+        // 应用数据
+        setCurrentSource(detailData.source);
+        setCurrentId(detailData.id);
+        setVideoYear(detailData.year);
+        setVideoTitle(detailData.title || titleParam);
+        setVideoCover(detailData.poster);
+        setDetail(detailData);
 
-        const preferRes = await preferBestSource(sourcesInfo, availableSources);
-        detailData = preferRes.bestSource;
-        setPrecomputedVideoInfo(preferRes.precomputedVideoInfo);
-        setAvailableSources(preferRes.sortedAvailableSources);
-      }
+        if (currentEpisodeIndex >= detailData.episodes.length) {
+          setCurrentEpisodeIndex(0);
+        }
 
-      console.log(detailData.source, detailData.id);
+        // 更新历史记录（不刷新页面）
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.set('source', detailData.source);
+        newUrl.searchParams.set('id', detailData.id);
+        newUrl.searchParams.set('title', detailData.title);
+        newUrl.searchParams.delete('prefer');
+        window.history.replaceState({}, '', newUrl.toString());
 
-      setNeedPrefer(false);
-      setCurrentSource(detailData.source);
-      setCurrentId(detailData.id);
-      setVideoYear(detailData.year);
-      setVideoTitle(detailData.title || videoTitleRef.current);
-      setVideoCover(detailData.poster);
-      setDetail(detailData);
-      if (currentEpisodeIndex >= detailData.episodes.length) {
-        setCurrentEpisodeIndex(0);
-      }
+        setLoadingStage('ready');
+        setTimeout(() => setLoading(false), 300);
 
-      // 规范URL参数
-      const newUrl = new URL(window.location.href);
-      newUrl.searchParams.set('source', detailData.source);
-      newUrl.searchParams.set('id', detailData.id);
-      newUrl.searchParams.set('year', detailData.year);
-      newUrl.searchParams.set('title', detailData.title);
-      newUrl.searchParams.delete('prefer');
-      window.history.replaceState({}, '', newUrl.toString());
-
-      setLoadingStage('ready');
-      setLoadingMessage('✨ 准备就绪，即将开始播放...');
-
-      // 短暂延迟让用户看到完成状态
-      setTimeout(() => {
+      } catch (err) {
+        console.error('初始化失败:', err);
+        setError('播放器配置出错，请检查网络后重试');
         setLoading(false);
-      }, 500);
+      }
     };
 
     initAll();
   }, []);
 
-  // 播放记录处理
+  // 播放记录处理 - 已整合进 initAll，此处改为仅监听收藏数据的额外同步逻辑
   useEffect(() => {
-    // 仅在初次挂载时检查播放记录
-    const initFromHistory = async () => {
-      if (!currentSource || !currentId) return;
-
+    if (!currentSource || !currentId) return;
+    (async () => {
       try {
-        const allRecords = await getAllPlayRecords();
-        const key = generateStorageKey(currentSource, currentId);
-        const record = allRecords[key];
-
-        if (record) {
-          const targetIndex = record.index - 1;
-          const targetTime = record.play_time;
-
-          // 更新当前选集索引
-          if (targetIndex !== currentEpisodeIndex) {
-            setCurrentEpisodeIndex(targetIndex);
-          }
-
-          // 保存待恢复的播放进度，待播放器就绪后跳转
-          resumeTimeRef.current = targetTime;
-        }
+        const fav = await isFavorited(currentSource, currentId);
+        setFavorited(fav);
       } catch (err) {
-        console.error('读取播放记录失败:', err);
+        console.error('检查收藏状态失败:', err);
       }
-    };
-
-    initFromHistory();
-  }, []);
+    })();
+  }, [currentSource, currentId]);
 
   // 处理换源
   const handleSourceChange = async (

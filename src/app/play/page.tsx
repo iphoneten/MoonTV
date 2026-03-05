@@ -500,8 +500,19 @@ const PlayPageClient: FC = () => {
           sourcesInfo = finalSources;
 
           if (finalSources.length > 0) {
-            // 如果带了 ID，先在搜索结果里找这个 ID
-            const matched = finalSources.find(s => s.source === sParam && s.id === idParam);
+            let matched = finalSources.find((s: any) => s.source === sParam && s.id === idParam);
+
+            // 如果需要优选且开启了优化，则在一批搜索结果中寻找最快的
+            if (!matched && needPreferRef.current && optimizationEnabled) {
+              setLoadingMessage('🚀 正在为您测速并优选最佳播放源...');
+              const { bestSource, precomputedVideoInfo, sortedAvailableSources } =
+                await preferBestSource(finalSources, finalSources);
+
+              matched = bestSource;
+              setPrecomputedVideoInfo(precomputedVideoInfo);
+              setAvailableSources(sortedAvailableSources);
+            }
+
             detailData = matched || finalSources[0];
 
             // 既然是新找到的源，重新同步一次它的播放记录
@@ -1254,12 +1265,12 @@ const PlayPageClient: FC = () => {
     }
 
     // 确保选集索引有效
-    if (
-      !detail ||
-      !detail.episodes ||
-      currentEpisodeIndex >= detail.episodes.length ||
-      currentEpisodeIndex < 0
-    ) {
+    if (!detail || !detail.episodes || detail.episodes.length === 0) {
+      setError(`该视频暂无可播放源或集数为空，请尝试切换其他可用播放源`);
+      return;
+    }
+
+    if (currentEpisodeIndex >= detail.episodes.length || currentEpisodeIndex < 0) {
       setError(`选集索引无效，当前共 ${totalEpisodes} 集`);
       return;
     }
@@ -1383,11 +1394,33 @@ const PlayPageClient: FC = () => {
         artPlayerRef.current.on('control', (state: boolean) => {
           updateTitleLayer(state);
         });
-        artPlayerRef.current.on('fullscreen', () => {
+        artPlayerRef.current.on('fullscreen', (state: boolean) => {
           updateTitleLayer(true);
+
+          // // 移动端全屏自动旋转逻辑
+          // const art = artPlayerRef.current;
+          // if (state && art && typeof window !== 'undefined' && (window as any).screen?.orientation?.lock) {
+          //   const video = art.video;
+          //   if (video && video.videoWidth > 0 && video.videoHeight > 0) {
+          //     const isLandscape = video.videoWidth > video.videoHeight;
+          //     if (isLandscape) {
+          //       (window as any).screen.orientation.lock('landscape').catch(() => { });
+          //     } else {
+          //       (window as any).screen.orientation.lock('portrait').catch(() => { });
+          //     }
+          //   }
+          // } else if (!state && typeof window !== 'undefined' && (window as any).screen?.orientation?.unlock) {
+          //   (window as any).screen.orientation.unlock().catch(() => { });
+          // }
         });
-        artPlayerRef.current.on('fullscreenWeb', () => {
+
+        artPlayerRef.current.on('fullscreenWeb', (state: boolean) => {
           updateTitleLayer(true);
+          // 网页全屏由于不一定会占据整个系统屏幕，通常不需要锁定方向，
+          // 但如果用户是在移动端浏览器中使用，unlock 也是安全的。
+          // if (!state && typeof window !== 'undefined' && (window as any).screen?.orientation?.unlock) {
+          //   (window as any).screen.orientation.unlock();
+          // }
         });
         artPlayerRef.current.on('video:volumechange', () => {
           lastVolumeRef.current = artPlayerRef.current.volume;

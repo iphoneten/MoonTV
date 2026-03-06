@@ -53,17 +53,6 @@ const PlayPageClient: FC = () => {
   const [favorited, setFavorited] = useState(false);
   const [currentId, setCurrentId] = useState(searchParams.get('id') || '');
 
-  // // 跳过片头片尾配置
-  // const [skipConfig, setSkipConfig] = useState<{
-  //   enable: boolean;
-  //   intro_time: number;
-  //   outro_time: number;
-  // }>({
-  //   enable: false,
-  //   intro_time: 0,
-  //   outro_time: 0,
-  // });
-
   const {
     playbackSpeed,
     skipConfigMap,
@@ -75,7 +64,7 @@ const PlayPageClient: FC = () => {
     intro_time: 0,
     outro_time: 0,
   };
-  console.log('currentSkipConfig', currentSkipConfig);
+
   const currentSkipConfigRef = useRef(currentSkipConfig);
 
   useEffect(() => {

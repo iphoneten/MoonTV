@@ -34,9 +34,7 @@ function DoubanPageClient() {
   const name = searchParams.get('name') || '';
 
   const {
-    pageScroll,
     doubanType,
-    setPageScroll,
     setDoubanType,
   } = useUIStore();
 
@@ -309,38 +307,6 @@ function DoubanPageClient() {
     return activePath;
   };
 
-  const srollView = () => {
-    const el = document.getElementById('page-scroll-container');
-    return el;
-  }
-
-  useEffect(() => {
-    const el = srollView();
-    if (!el) return;
-
-    const onScroll = () => {
-      console.log('豆瓣页面滚动位置:', el.scrollTop, getActivePath());
-      setPageScroll('douban', el.scrollTop); // 保存滚动位置到全局状态
-    };
-
-    el.addEventListener('scroll', onScroll);
-    return () => el.removeEventListener('scroll', onScroll);
-  }, []);
-
-  useEffect(() => {
-    const el = srollView();
-    if (!el) return;
-    // if (type !== doubanType) return; // 只有当类型匹配时才恢复滚动位置    
-    // 恢复滚动位置
-    const scrollTop = pageScroll['douban'] || 0;
-    if (type !== doubanType) {
-      setPageScroll('douban', 0); // 如果类型不匹配，重置滚动位置为0
-    } else {
-      el.scrollTo(0, scrollTop);
-    }
-  }, [pageScroll, type]);
-
-
   return (
     <PageLayout activePath={getActivePath()}>
       <div className='px-4 sm:px-10 py-4 sm:py-8 overflow-visible'>
@@ -365,6 +331,7 @@ function DoubanPageClient() {
                 secondarySelection={secondarySelection}
                 onPrimaryChange={handlePrimaryChange}
                 onSecondaryChange={handleSecondaryChange}
+                tvEntry
               />
             </div>
           )}

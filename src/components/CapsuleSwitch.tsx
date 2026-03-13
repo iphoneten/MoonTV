@@ -7,6 +7,7 @@ interface CapsuleSwitchProps {
   active: string;
   onChange: (value: string) => void;
   className?: string;
+  tvEntry?: boolean;
 }
 
 const CapsuleSwitch: React.FC<CapsuleSwitchProps> = ({
@@ -14,6 +15,7 @@ const CapsuleSwitch: React.FC<CapsuleSwitchProps> = ({
   active,
   onChange,
   className,
+  tvEntry = false,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -85,6 +87,8 @@ const CapsuleSwitch: React.FC<CapsuleSwitchProps> = ({
               buttonRefs.current[index] = el;
             }}
             onClick={() => onChange(opt.value)}
+            data-tv-focusable='true'
+            data-tv-entry={tvEntry && isActive ? 'true' : undefined}
             className={`relative z-10 w-16 px-3 py-1 text-xs sm:w-20 sm:py-2 sm:text-sm rounded-full font-medium transition-all duration-200 cursor-pointer ${isActive
                 ? 'text-gray-900 dark:text-gray-100'
                 : 'text-gray-700 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'

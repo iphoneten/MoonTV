@@ -17,7 +17,6 @@ import { SearchResult } from '@/lib/types';
 import PageLayout from '@/components/PageLayout';
 import VideoCard from '@/components/VideoCard';
 
-import useUIStore from '@/store/UIStore';
 
 function SearchPageClient() {
   // 搜索历史
@@ -31,11 +30,6 @@ function SearchPageClient() {
   const [isLoading, setIsLoading] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
-  const {
-    pageScroll,
-    setPageScroll,
-  } = useUIStore();
-
   // 获取默认聚合设置：只读取用户本地设置，默认为 true
   const getDefaultAggregate = () => {
     if (typeof window !== 'undefined') {
@@ -237,32 +231,6 @@ function SearchPageClient() {
     }
   };
 
-  const srollView = () => {
-    const el = document.getElementById('page-scroll-container');
-    return el;
-  }
-
-  useEffect(() => {
-    const el = srollView();
-    if (!el) return;
-
-    const onScroll = () => {
-      setPageScroll('search', el.scrollTop); // 保存滚动位置到全局状态
-    };
-
-    el.addEventListener('scroll', onScroll);
-    return () => el.removeEventListener('scroll', onScroll);
-  }, []);
-
-  useEffect(() => {
-    const el = srollView();
-    if (!el) return;
-
-    // 恢复滚动位置
-    const scrollTop = pageScroll['search'] || 0;
-    el.scrollTo(0, scrollTop);
-  });
-
   return (
     <PageLayout activePath='/search'>
       <div className='px-4 sm:px-10 py-4 sm:py-8 overflow-visible mb-10'>
@@ -273,6 +241,7 @@ function SearchPageClient() {
               <Search className='absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400 dark:text-gray-500' />
               <input
                 id='searchInput'
+                data-tv-entry='true'
                 type='text'
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}

@@ -7,7 +7,6 @@ import { DoubanItem } from "@/lib/types";
 import PageLayout from "@/components/PageLayout";
 import VideoCard from "@/components/VideoCard";
 
-import useUIStore from "@/store/UIStore";
 
 function BTVClient() {
   const [loading, setLoading] = useState(false);
@@ -15,38 +14,6 @@ function BTVClient() {
   const [data, setData] = useState<DoubanItem[]>([]);
   const observer = useRef<IntersectionObserver | null>(null);
   const cousour = useRef(0);
-  const {
-    pageScroll,
-    setPageScroll,
-  } = useUIStore();
-
-  const srollView = () => {
-    const el = document.getElementById('page-scroll-container');
-    return el;
-  }
-
-  useEffect(() => {
-    const el = srollView();
-    if (!el) return;
-
-    const onScroll = () => {
-      setPageScroll('btv', el.scrollTop); // 保存滚动位置到全局状态
-    };
-
-    el.addEventListener('scroll', onScroll);
-    return () => el.removeEventListener('scroll', onScroll);
-  }, [setPageScroll]);
-
-  useEffect(() => {
-    const el = srollView();
-    if (!el) return;
-
-    // 恢复滚动位置
-    const scrollTop = pageScroll['btv'] || 0;
-    el.scrollTo(0, scrollTop);
-  });
-
-
   const getData = useCallback(async () => {
     if (loading) return;
     setLoading(true);

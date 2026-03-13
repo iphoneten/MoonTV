@@ -15,6 +15,7 @@ interface DoubanSelectorProps {
   secondarySelection?: string;
   onPrimaryChange: (value: string) => void;
   onSecondaryChange: (value: string) => void;
+  tvEntry?: boolean;
 }
 
 const DoubanSelector: React.FC<DoubanSelectorProps> = ({
@@ -23,6 +24,7 @@ const DoubanSelector: React.FC<DoubanSelectorProps> = ({
   secondarySelection,
   onPrimaryChange,
   onSecondaryChange,
+  tvEntry = false,
 }) => {
   // 为不同的选择器创建独立的refs和状态
   const primaryContainerRef = useRef<HTMLDivElement>(null);
@@ -204,7 +206,8 @@ const DoubanSelector: React.FC<DoubanSelectorProps> = ({
     options: SelectorOption[],
     activeValue: string | undefined,
     onChange: (value: string) => void,
-    isPrimary = false
+    isPrimary = false,
+    entryEligible = false
   ) => {
     const containerRef = isPrimary
       ? primaryContainerRef
@@ -239,6 +242,8 @@ const DoubanSelector: React.FC<DoubanSelectorProps> = ({
                 buttonRefs.current[index] = el;
               }}
               onClick={() => onChange(option.value)}
+              data-tv-focusable='true'
+              data-tv-entry={tvEntry && entryEligible && isActive ? 'true' : undefined}
               className={`relative z-10 px-2 py-1 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium rounded-full transition-all duration-200 whitespace-nowrap ${
                 isActive
                   ? 'text-gray-900 dark:text-gray-100 cursor-default'
@@ -268,6 +273,7 @@ const DoubanSelector: React.FC<DoubanSelectorProps> = ({
                 moviePrimaryOptions,
                 primarySelection || moviePrimaryOptions[0].value,
                 onPrimaryChange,
+                true,
                 true
               )}
             </div>
@@ -283,6 +289,7 @@ const DoubanSelector: React.FC<DoubanSelectorProps> = ({
                 movieSecondaryOptions,
                 secondarySelection || movieSecondaryOptions[0].value,
                 onSecondaryChange,
+                false,
                 false
               )}
             </div>
@@ -301,7 +308,8 @@ const DoubanSelector: React.FC<DoubanSelectorProps> = ({
               tvOptions,
               secondarySelection || tvOptions[0].value,
               onSecondaryChange,
-              false
+              false,
+              true
             )}
           </div>
         </div>
@@ -318,7 +326,8 @@ const DoubanSelector: React.FC<DoubanSelectorProps> = ({
               showOptions,
               secondarySelection || showOptions[0].value,
               onSecondaryChange,
-              false
+              false,
+              true
             )}
           </div>
         </div>

@@ -3,29 +3,22 @@ import { create } from "zustand";
 
 export interface IUIStoreState {
   activeTab: 'home' | 'favorites';
-  pageScroll: {
-    [key: string]: number;
-  }
   doubanType: 'movie' | 'tv' | 'show';
+  topNavLast: string;
   setActiveTab: (tab: 'home' | 'favorites') => void;
-  setPageScroll: (key: string, value: number) => void;
   setDoubanType: (type: 'movie' | 'tv' | 'show') => void;
+  setTopNavLast: (value: string) => void;
 }
 
 const useUIStore = create<IUIStoreState>()(
   // persist(
   (set) => ({
     activeTab: 'home',
-    pageScroll: {},
     doubanType: 'movie',
+    topNavLast: '/',
     setDoubanType: (type) => set({ doubanType: type }),
     setActiveTab: (tab) => set({ activeTab: tab }),
-    setPageScroll: (key: string, value: number) => set((state) => ({
-      pageScroll: {
-        ...state.pageScroll,
-        [key]: value,
-      }
-    })),
+    setTopNavLast: (value) => set({ topNavLast: value }),
   }),
   // {
   //   name: "ui-storage", // 存储的名称

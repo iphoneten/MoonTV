@@ -877,6 +877,30 @@ const PlayPageClient: FC = () => {
       }
     }
 
+    // Enter = 切换全屏（进/出）
+    if (e.key === 'Enter') {
+      const player = artPlayerRef.current;
+      if (player) {
+        if (player.fullscreen || player.fullscreenWeb) {
+          player.fullscreen = false;
+          player.fullscreenWeb = false;
+        } else {
+          player.fullscreenWeb = true;
+        }
+        e.preventDefault();
+      }
+    }
+
+    // Backspace/Escape = 退出全屏
+    if (e.key === 'Backspace' || e.key === 'Escape') {
+      const player = artPlayerRef.current;
+      if (player && (player.fullscreen || player.fullscreenWeb)) {
+        player.fullscreen = false;
+        player.fullscreenWeb = false;
+        e.preventDefault();
+      }
+    }
+
     // f 键 = 切换全屏
     if (e.key === 'f' || e.key === 'F') {
       if (artPlayerRef.current) {

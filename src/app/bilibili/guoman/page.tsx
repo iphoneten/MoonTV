@@ -6,7 +6,6 @@ import { DoubanItem } from "@/lib/types";
 import PageLayout from "@/components/PageLayout";
 import VideoCard from "@/components/VideoCard";
 
-import useUIStore from "@/store/UIStore";
 
 const GuomanPageClient = () => {
   const [loading, setLoading] = useState(false);
@@ -14,37 +13,6 @@ const GuomanPageClient = () => {
   const [data, setData] = useState<DoubanItem[]>([]);
   const observer = useRef<IntersectionObserver | null>(null);
   const cousourRef = useRef(0);
-
-  const {
-    pageScroll,
-    setPageScroll,
-  } = useUIStore();
-
-  const srollView = () => {
-    const el = document.getElementById('page-scroll-container');
-    return el;
-  }
-
-  useEffect(() => {
-    const el = srollView();
-    if (!el) return;
-
-    const onScroll = () => {
-      setPageScroll('bguoman', el.scrollTop); // 保存滚动位置到全局状态
-    };
-
-    el.addEventListener('scroll', onScroll);
-    return () => el.removeEventListener('scroll', onScroll);
-  }, [setPageScroll]);
-
-  useEffect(() => {
-    const el = srollView();
-    if (!el) return;
-
-    // 恢复滚动位置
-    const scrollTop = pageScroll['bguoman'] || 0;
-    el.scrollTo(0, scrollTop);
-  });
 
   const getData = useCallback(async () => {
     if (loading) return;

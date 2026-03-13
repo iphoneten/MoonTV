@@ -68,11 +68,29 @@ const nextConfig = {
   },
 };
 
+const runtimeCaching = require('next-pwa/cache');
 const withPWA = require('next-pwa')({
   dest: 'public',
   disable: process.env.NODE_ENV === 'development',
   register: true,
   skipWaiting: true,
+  runtimeCaching: [
+    {
+      urlPattern: /\.(m3u8|ts|m4s|mp4|key)(\?.*)?$/i,
+      handler: 'CacheFirst',
+      options: {
+        cacheName: 'moontv-video',
+        expiration: {
+          maxEntries: 2000,
+          maxAgeSeconds: 60 * 60 * 24 * 30,
+        },
+        cacheableResponse: {
+          statuses: [0, 200],
+        },
+      },
+    },
+    ...runtimeCaching,
+  ],
 });
 
 module.exports = withPWA(nextConfig);

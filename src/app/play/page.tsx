@@ -25,7 +25,7 @@ import { preferBestSource, PrecomputedVideoInfo } from '@/lib/videoOptimization'
 import EpisodeSelector from '@/components/EpisodeSelector';
 import PageLayout from '@/components/PageLayout';
 
-import usePlayStore from '@/store/PlayStore';
+import usePlayStore, { CachedEpisode } from '@/store/PlayStore';
 
 import ErrorPage from '@/app/play/errorPage';
 import FavoriteIcon from '@/app/play/favoriteIcon';
@@ -58,6 +58,8 @@ const PlayPageClient: FC = () => {
     skipConfigMap,
     setPlaybackSpeed,
     setSkipConfigMap,
+    addCachedEpisode,
+    removeCachedEpisode,
   } = usePlayStore();
   const currentSkipConfig = skipConfigMap[currentId] || {
     enable: false,
@@ -138,6 +140,14 @@ const PlayPageClient: FC = () => {
   const autoSwitchingRef = useRef(false);
   const lastAutoSwitchAtRef = useRef(0);
 
+  // 视频播放地址
+  const [videoUrl, setVideoUrl] = useState('');
+  const VIDEO_CACHE_NAME = 'moontv-video';
+  const [isEpisodeCached, setIsEpisodeCached] = useState(false);
+  const [isCaching, setIsCaching] = useState(false);
+  const isEpisodeCachedRef = useRef(isEpisodeCached);
+  const isCachingRef = useRef(isCaching);
+
   // 同步最新值到 refs
   useEffect(() => {
     currentSourceRef.current = currentSource;
@@ -155,8 +165,13 @@ const PlayPageClient: FC = () => {
     videoYear,
   ]);
 
-  // 视频播放地址
-  const [videoUrl, setVideoUrl] = useState('');
+  useEffect(() => {
+    isEpisodeCachedRef.current = isEpisodeCached;
+  }, [isEpisodeCached]);
+
+  useEffect(() => {
+    isCachingRef.current = isCaching;
+  }, [isCaching]);
 
   // 总集数
   const totalEpisodes = detail?.episodes?.length || 0;
@@ -269,6 +284,278 @@ const PlayPageClient: FC = () => {
     }
   };
 
+  const isM3u8Url = (url: string) => {
+    try {
+      const pathname = new URL(url).pathname.toLowerCase();
+      return pathname.endsWith('.m3u8');
+    } catch {
+      return url.toLowerCase().includes('.m3u8');
+    }
+  };
+
+  const normalizeUrl = (rawUrl: string, baseUrl: string) => {
+    try {
+      return new URL(rawUrl, baseUrl).toString();
+    } catch {
+      return rawUrl;
+    }
+  };
+
+  const resolveMediaPlaylist = async (url: string) => {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`获取播放列表失败: ${response.status}`);
+    }
+    const text = await response.text();
+
+    if (text.includes('#EXT-X-STREAM-INF')) {
+      const lines = text.split('\n');
+      let bestUrl = '';
+      let bestBandwidth = -1;
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (line.startsWith('#EXT-X-STREAM-INF')) {
+          const bwMatch = /BANDWIDTH=(\d+)/.exec(line);
+          const bandwidth = bwMatch ? Number(bwMatch[1]) : 0;
+          const nextLine = (lines[i + 1] || '').trim();
+          if (nextLine && !nextLine.startsWith('#')) {
+            const absUrl = normalizeUrl(nextLine, url);
+            if (bandwidth >= bestBandwidth) {
+              bestBandwidth = bandwidth;
+              bestUrl = absUrl;
+            }
+          }
+        }
+      }
+      if (bestUrl) {
+        return resolveMediaPlaylist(bestUrl);
+      }
+    }
+
+    const lines = text.split('\n');
+    const normalizedLines: string[] = [];
+    const segmentUrls: string[] = [];
+    const keyUrls: string[] = [];
+
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line) {
+        normalizedLines.push(rawLine);
+        continue;
+      }
+
+      if (line.startsWith('#EXT-X-KEY')) {
+        const uriMatch = /URI="([^"]+)"/.exec(line);
+        if (uriMatch) {
+          const absKeyUrl = normalizeUrl(uriMatch[1], url);
+          keyUrls.push(absKeyUrl);
+          normalizedLines.push(line.replace(uriMatch[1], absKeyUrl));
+        } else {
+          normalizedLines.push(line);
+        }
+        continue;
+      }
+
+      if (line.startsWith('#')) {
+        normalizedLines.push(line);
+        continue;
+      }
+
+      const absUrl = normalizeUrl(line, url);
+      segmentUrls.push(absUrl);
+      normalizedLines.push(absUrl);
+    }
+
+    return {
+      manifestText: normalizedLines.join('\n'),
+      segmentUrls,
+      keyUrls,
+    };
+  };
+
+  const cacheUrlsWithConcurrency = async (
+    cache: Cache,
+    urls: string[],
+    concurrency = 6,
+    onProgress?: (completed: number, total: number) => void
+  ) => {
+    let index = 0;
+    let completed = 0;
+    const total = urls.length;
+    const workers = new Array(Math.min(concurrency, total)).fill(null).map(() =>
+      (async () => {
+        while (true) {
+          const currentIndex = index++;
+          if (currentIndex >= total) break;
+          const targetUrl = urls[currentIndex];
+          const request = new Request(targetUrl, { mode: 'cors' });
+          const cached = await cache.match(request);
+          if (!cached) {
+            const response = await fetch(request);
+            if (response.ok || response.type === 'opaque') {
+              await cache.put(request, response);
+            }
+          }
+          completed += 1;
+          onProgress?.(completed, total);
+        }
+      })()
+    );
+
+    await Promise.all(workers);
+  };
+
+  const refreshEpisodeCacheState = async (url: string) => {
+    if (typeof window === 'undefined') return;
+    if (!url) {
+      setIsEpisodeCached(false);
+      return;
+    }
+    try {
+      const cache = await caches.open(VIDEO_CACHE_NAME);
+      const hit = await cache.match(url);
+      const isCached = !!hit;
+      setIsEpisodeCached(isCached);
+
+      const entry = buildCachedEpisodeEntry(url);
+      if (entry && !isCached) {
+        removeCachedEpisode(entry.key);
+      }
+    } catch {
+      setIsEpisodeCached(false);
+    }
+  };
+
+  const buildCachedEpisodeEntry = (url: string): CachedEpisode | null => {
+    const d = detailRef.current;
+    if (!d || !url) return null;
+    const episodeIndex = currentEpisodeIndexRef.current;
+    const key = `${d.source}-${d.id}-${episodeIndex}`;
+    return {
+      key,
+      title: d.title || videoTitleRef.current || '',
+      year: d.year || videoYearRef.current || '',
+      cover: d.poster,
+      source: d.source,
+      sourceName: d.source_name,
+      id: d.id,
+      episodeIndex,
+      totalEpisodes: d.episodes?.length || 1,
+      url,
+      cachedAt: Date.now(),
+    };
+  };
+
+  const cacheCurrentEpisode = async () => {
+    if (isCaching || !videoUrl) return;
+    setIsCaching(true);
+    try {
+      const cache = await caches.open(VIDEO_CACHE_NAME);
+      if (isM3u8Url(videoUrl)) {
+        if (artPlayerRef.current?.notice) {
+          artPlayerRef.current.notice.show = '开始缓存播放列表...';
+        }
+        const { manifestText, segmentUrls, keyUrls } =
+          await resolveMediaPlaylist(videoUrl);
+
+        const manifestResponse = new Response(manifestText, {
+          headers: {
+            'Content-Type': 'application/vnd.apple.mpegurl',
+          },
+        });
+        await cache.put(videoUrl, manifestResponse);
+
+        const allUrls = Array.from(new Set([...segmentUrls, ...keyUrls]));
+        await cacheUrlsWithConcurrency(cache, allUrls, 6, (done, total) => {
+          if (artPlayerRef.current?.notice) {
+            artPlayerRef.current.notice.show = `离线缓存中 ${done}/${total}`;
+          }
+        });
+      } else {
+        if (artPlayerRef.current?.notice) {
+          artPlayerRef.current.notice.show = '开始缓存视频文件...';
+        }
+        const response = await fetch(videoUrl);
+        if (!response.ok) {
+          throw new Error(`缓存失败: ${response.status}`);
+        }
+        await cache.put(videoUrl, response);
+      }
+
+      setIsEpisodeCached(true);
+      const entry = buildCachedEpisodeEntry(videoUrl);
+      if (entry) {
+        addCachedEpisode(entry);
+      }
+      if (artPlayerRef.current?.notice) {
+        artPlayerRef.current.notice.show = '离线缓存完成';
+      }
+    } catch (err) {
+      console.error('离线缓存失败:', err);
+      if (artPlayerRef.current?.notice) {
+        artPlayerRef.current.notice.show = '离线缓存失败';
+      }
+    } finally {
+      setIsCaching(false);
+      refreshEpisodeCacheState(videoUrl);
+    }
+  };
+
+  const removeEpisodeCache = async () => {
+    if (!videoUrl) return;
+    try {
+      const cache = await caches.open(VIDEO_CACHE_NAME);
+      if (isM3u8Url(videoUrl)) {
+        const cachedManifest = await cache.match(videoUrl);
+        let manifestText = '';
+        if (cachedManifest) {
+          manifestText = await cachedManifest.text();
+        }
+        if (!manifestText) {
+          const networkManifest = await fetch(videoUrl);
+          if (networkManifest.ok) {
+            manifestText = await networkManifest.text();
+          }
+        }
+        if (manifestText) {
+          const lines = manifestText.split('\n');
+          for (const rawLine of lines) {
+            const line = rawLine.trim();
+            if (!line) continue;
+            if (line.startsWith('#EXT-X-KEY')) {
+              const uriMatch = /URI="([^"]+)"/.exec(line);
+              if (uriMatch) {
+                const absKeyUrl = normalizeUrl(uriMatch[1], videoUrl);
+                await cache.delete(absKeyUrl);
+              }
+              continue;
+            }
+            if (line.startsWith('#')) continue;
+            const absUrl = normalizeUrl(line, videoUrl);
+            await cache.delete(absUrl);
+          }
+        }
+      }
+
+      await cache.delete(videoUrl);
+      setIsEpisodeCached(false);
+      const entry = buildCachedEpisodeEntry(videoUrl);
+      if (entry) {
+        removeCachedEpisode(entry.key);
+      }
+      if (artPlayerRef.current?.notice) {
+        artPlayerRef.current.notice.show = '已删除离线缓存';
+      }
+    } catch (err) {
+      console.error('删除缓存失败:', err);
+      if (artPlayerRef.current?.notice) {
+        artPlayerRef.current.notice.show = '删除缓存失败';
+      }
+    } finally {
+      refreshEpisodeCacheState(videoUrl);
+    }
+  };
+
   // 跳过片头片尾配置相关函数
   const handleSkipConfigChange = async (newConfig: {
     enable: boolean;
@@ -362,6 +649,10 @@ const PlayPageClient: FC = () => {
     updateVideoUrl(detail, currentEpisodeIndex);
   }, [detail, currentEpisodeIndex]);
 
+  useEffect(() => {
+    refreshEpisodeCacheState(videoUrl);
+  }, [videoUrl]);
+
   // 进入页面时直接获取全部源信息
   useEffect(() => {
     const fetchSourceDetail = async (
@@ -426,6 +717,39 @@ const PlayPageClient: FC = () => {
       const idParam = searchParams.get('id') || '';
       const sTitleParam = searchParams.get('stitle') || '';
       const titleParam = searchParams.get('title') || '';
+      const offlineUrlParam = searchParams.get('offline_url') || '';
+      const offlineFlag = searchParams.get('offline') === '1';
+      const coverParam = searchParams.get('cover') || '';
+      const sourceNameParam = searchParams.get('sname') || '';
+      const epParamRaw = searchParams.get('ep') || '';
+      const epParam = Number.isNaN(Number(epParamRaw))
+        ? 0
+        : Math.max(0, Number(epParamRaw));
+
+      if (offlineFlag && offlineUrlParam) {
+        const offlineDetail: SearchResult = {
+          source: sParam || 'offline',
+          id: idParam || offlineUrlParam,
+          title: titleParam || '离线播放',
+          year: searchParams.get('year') || '',
+          poster: coverParam || '',
+          episodes: [offlineUrlParam],
+          source_name: sourceNameParam || '离线缓存',
+        };
+        setAvailableSources([offlineDetail]);
+        setCurrentSource(offlineDetail.source);
+        setCurrentId(offlineDetail.id);
+        setVideoYear(offlineDetail.year);
+        setVideoTitle(offlineDetail.title);
+        setVideoCover(offlineDetail.poster);
+        setDetail(offlineDetail);
+        setCurrentEpisodeIndex(0);
+        setVideoUrl(offlineUrlParam);
+        setError(null);
+        setLoadingStage('ready');
+        setLoading(false);
+        return;
+      }
 
       if (!sParam && !idParam && !titleParam && !sTitleParam) {
         setError('参数不完整，无法播放');
@@ -1190,6 +1514,22 @@ const PlayPageClient: FC = () => {
         },
       },
       {
+        name: '离线缓存',
+        html: isEpisodeCached ? '删除离线缓存' : '离线缓存本集',
+        tooltip: isEpisodeCached ? '已缓存' : '未缓存',
+        onClick() {
+          if (isCachingRef.current) {
+            return '正在缓存中...';
+          }
+          if (isEpisodeCachedRef.current) {
+            removeEpisodeCache();
+            return '已删除缓存';
+          }
+          cacheCurrentEpisode();
+          return '开始缓存';
+        },
+      },
+      {
         name: '跳过片头片尾',
         html: '跳过片头片尾',
         switch: currentSkipConfig.enable,
@@ -1259,6 +1599,26 @@ const PlayPageClient: FC = () => {
       },
     ]
   }
+
+  useEffect(() => {
+    if (!artPlayerRef.current?.setting) return;
+    artPlayerRef.current.setting.update({
+      name: '离线缓存',
+      html: isEpisodeCached ? '删除离线缓存' : '离线缓存本集',
+      tooltip: isEpisodeCached ? '已缓存' : '未缓存',
+      onClick() {
+        if (isCachingRef.current) {
+          return '正在缓存中...';
+        }
+        if (isEpisodeCachedRef.current) {
+          removeEpisodeCache();
+          return '已删除缓存';
+        }
+        cacheCurrentEpisode();
+        return '开始缓存';
+      },
+    });
+  }, [isEpisodeCached, isCaching, videoUrl]);
 
   const isSeekingRef = useRef(false);
 

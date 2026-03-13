@@ -4,11 +4,12 @@
 
 import { KeyRound, LogOut, Settings, Shield, User, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
 import { UpdateStatus } from '@/lib/version';
+import usePlayStore, { CachedEpisode } from '@/store/PlayStore';
 
 interface AuthInfo {
   username?: string;
@@ -19,6 +20,7 @@ export const UserMenu: React.FC = () => {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isOfflineCacheOpen, setIsOfflineCacheOpen] = useState(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [authInfo, setAuthInfo] = useState<AuthInfo | null>(null);
   const [storageType, setStorageType] = useState<string>('localstorage');
@@ -31,12 +33,124 @@ export const UserMenu: React.FC = () => {
   const [enableOptimization, setEnableOptimization] = useState(true);
   const [enableImageProxy, setEnableImageProxy] = useState(false);
   const [enableDoubanProxy, setEnableDoubanProxy] = useState(false);
+  const { cachedEpisodes, removeCachedEpisode, clearCachedEpisodes } = usePlayStore();
+  const [removingCacheKeys, setRemovingCacheKeys] = useState<Set<string>>(
+    new Set()
+  );
+
+  const sortedCachedEpisodes = useMemo(() => {
+    return [...cachedEpisodes].sort((a, b) => b.cachedAt - a.cachedAt);
+  }, [cachedEpisodes]);
 
   // 修改密码相关状态
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordError, setPasswordError] = useState('');
+
+  const isM3u8Url = (url: string) => {
+    try {
+      return new URL(url).pathname.toLowerCase().endsWith('.m3u8');
+    } catch {
+      return url.toLowerCase().includes('.m3u8');
+    }
+  };
+
+  const normalizeUrl = (rawUrl: string, baseUrl: string) => {
+    try {
+      return new URL(rawUrl, baseUrl).toString();
+    } catch {
+      return rawUrl;
+    }
+  };
+
+  const removeCachedEpisodeAssets = async (episode: CachedEpisode) => {
+    if (typeof window === 'undefined' || !('caches' in window)) {
+      return;
+    }
+    const cache = await caches.open('moontv-video');
+    if (isM3u8Url(episode.url)) {
+      let manifestText = '';
+      const cachedManifest = await cache.match(episode.url);
+      if (cachedManifest) {
+        manifestText = await cachedManifest.text();
+      } else {
+        try {
+          const networkManifest = await fetch(episode.url);
+          if (networkManifest.ok) {
+            manifestText = await networkManifest.text();
+          }
+        } catch (_) {
+          // ignore
+        }
+      }
+
+      if (manifestText) {
+        const lines = manifestText.split('\n');
+        for (const rawLine of lines) {
+          const line = rawLine.trim();
+          if (!line) continue;
+          if (line.startsWith('#EXT-X-KEY')) {
+            const uriMatch = /URI="([^"]+)"/.exec(line);
+            if (uriMatch) {
+              const absKeyUrl = normalizeUrl(uriMatch[1], episode.url);
+              await cache.delete(absKeyUrl);
+            }
+            continue;
+          }
+          if (line.startsWith('#')) continue;
+          const absUrl = normalizeUrl(line, episode.url);
+          await cache.delete(absUrl);
+        }
+      }
+    }
+    await cache.delete(episode.url);
+  };
+
+  const handleRemoveCachedEpisode = async (episode: CachedEpisode) => {
+    if (removingCacheKeys.has(episode.key)) return;
+    setRemovingCacheKeys((prev) => new Set(prev).add(episode.key));
+    try {
+      await removeCachedEpisodeAssets(episode);
+    } catch (err) {
+      console.warn('删除缓存失败:', err);
+    } finally {
+      removeCachedEpisode(episode.key);
+      setRemovingCacheKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(episode.key);
+        return next;
+      });
+    }
+  };
+
+  const handleClearCachedEpisodes = async () => {
+    for (const episode of sortedCachedEpisodes) {
+      try {
+        await removeCachedEpisodeAssets(episode);
+      } catch (_) {
+        // ignore
+      } finally {
+        removeCachedEpisode(episode.key);
+      }
+    }
+    clearCachedEpisodes();
+  };
+
+  const handlePlayCachedEpisode = (episode: CachedEpisode) => {
+    const params = new URLSearchParams();
+    params.set('offline', '1');
+    params.set('offline_url', episode.url);
+    params.set('title', episode.title || '离线播放');
+    if (episode.year) params.set('year', episode.year);
+    if (episode.cover) params.set('cover', episode.cover);
+    if (episode.source) params.set('source', episode.source);
+    if (episode.id) params.set('id', episode.id);
+    if (episode.sourceName) params.set('sname', episode.sourceName);
+    params.set('ep', String(episode.episodeIndex));
+    router.push(`/play?${params.toString()}`, { scroll: false });
+    setIsOfflineCacheOpen(false);
+  };
 
   // 版本检查相关状态
   const [updateStatus] = useState<UpdateStatus | null>(null);
@@ -217,6 +331,14 @@ export const UserMenu: React.FC = () => {
     setIsSettingsOpen(false);
   };
 
+  const handleOpenOfflineCache = () => {
+    setIsOfflineCacheOpen(true);
+  };
+
+  const handleCloseOfflineCache = () => {
+    setIsOfflineCacheOpen(false);
+  };
+
   // 设置相关的处理函数
   const handleAggregateToggle = (value: boolean) => {
     setDefaultAggregateSearch(value);
@@ -360,6 +482,14 @@ export const UserMenu: React.FC = () => {
           >
             <Settings className='w-4 h-4 text-gray-500 dark:text-gray-400' />
             <span className='font-medium'>设置</span>
+          </button>
+          {/* 离线缓存按钮 */}
+          <button
+            onClick={handleOpenOfflineCache}
+            className='w-full px-3 py-2 text-left flex items-center gap-2.5 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-sm'
+          >
+            <Shield className='w-4 h-4 text-gray-500 dark:text-gray-400' />
+            <span className='font-medium'>离线缓存</span>
           </button>
 
           {/* 管理面板按钮 */}
@@ -611,6 +741,7 @@ export const UserMenu: React.FC = () => {
               disabled={!enableImageProxy}
             />
           </div>
+
         </div>
 
         {/* 底部说明 */}
@@ -619,6 +750,85 @@ export const UserMenu: React.FC = () => {
             这些设置保存在本地浏览器中
           </p>
         </div>
+      </div>
+    </>
+  );
+
+  const offlineCachePanel = (
+    <>
+      <div
+        className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[1000]'
+        onClick={handleCloseOfflineCache}
+      />
+      <div className='fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white dark:bg-gray-900 rounded-xl shadow-xl z-[1001] p-6'>
+        <div className='flex items-center justify-between mb-6'>
+          <div>
+            <h3 className='text-xl font-bold text-gray-800 dark:text-gray-200'>
+              离线缓存
+            </h3>
+            <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
+              已缓存 {sortedCachedEpisodes.length} 集
+            </p>
+          </div>
+          <div className='flex items-center gap-2'>
+            {sortedCachedEpisodes.length > 0 && (
+              <button
+                className='px-2 py-1 text-xs text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 border border-red-200 hover:border-red-300 dark:border-red-800 dark:hover:border-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors'
+                onClick={handleClearCachedEpisodes}
+              >
+                清空缓存
+              </button>
+            )}
+            <button
+              onClick={handleCloseOfflineCache}
+              className='w-8 h-8 p-1 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors'
+              aria-label='Close'
+            >
+              <X className='w-full h-full' />
+            </button>
+          </div>
+        </div>
+
+        {sortedCachedEpisodes.length === 0 ? (
+          <div className='text-sm text-gray-500 dark:text-gray-400'>
+            暂无缓存
+          </div>
+        ) : (
+          <div className='max-h-72 overflow-auto rounded-md border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-800'>
+            {sortedCachedEpisodes.map((episode) => {
+              const removing = removingCacheKeys.has(episode.key);
+              const episodeLabel = `第${episode.episodeIndex + 1}集`;
+              return (
+                <div
+                  key={episode.key}
+                  className='flex items-center gap-3 px-3 py-2'
+                >
+                  <button
+                    className='flex-1 min-w-0 text-left'
+                    onClick={() => handlePlayCachedEpisode(episode)}
+                    disabled={removing}
+                  >
+                    <div className='text-sm text-gray-800 dark:text-gray-200 truncate'>
+                      {episode.title}
+                    </div>
+                    <div className='text-xs text-gray-500 dark:text-gray-400'>
+                      {episodeLabel}
+                      {episode.year ? ` · ${episode.year}` : ''}
+                      {episode.sourceName ? ` · ${episode.sourceName}` : ''}
+                    </div>
+                  </button>
+                  <button
+                    className='text-xs text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400'
+                    onClick={() => handleRemoveCachedEpisode(episode)}
+                    disabled={removing}
+                  >
+                    {removing ? '删除中' : '删除'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </>
   );
@@ -736,6 +946,9 @@ export const UserMenu: React.FC = () => {
 
       {/* 使用 Portal 将设置面板渲染到 document.body */}
       {isSettingsOpen && mounted && createPortal(settingsPanel, document.body)}
+      {isOfflineCacheOpen &&
+        mounted &&
+        createPortal(offlineCachePanel, document.body)}
 
       {/* 使用 Portal 将修改密码面板渲染到 document.body */}
       {isChangePasswordOpen &&

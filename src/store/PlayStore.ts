@@ -16,6 +16,24 @@ export interface IPlayStoreState {
   setSkipConfig: (config: SkipConfig) => void;
   setPlaybackSpeed: (speed: number) => void;
   setSkipConfigMap: (key: string, config: SkipConfig) => void;
+  cachedEpisodes: CachedEpisode[];
+  addCachedEpisode: (episode: CachedEpisode) => void;
+  removeCachedEpisode: (key: string) => void;
+  clearCachedEpisodes: () => void;
+}
+
+export interface CachedEpisode {
+  key: string;
+  title: string;
+  year?: string;
+  cover?: string;
+  source?: string;
+  sourceName?: string;
+  id?: string;
+  episodeIndex: number;
+  totalEpisodes?: number;
+  url: string;
+  cachedAt: number;
 }
 
 const usePlayStore = create<IPlayStoreState>()(
@@ -31,7 +49,15 @@ const usePlayStore = create<IPlayStoreState>()(
       setSkipConfigMap: (key: string | number, config: SkipConfig) => set((state) => ({ skipConfigMap: { ...state.skipConfigMap, [key]: config } })),
       setPlaybackSpeed: (speed: number) => set({ playbackSpeed: speed }),
       setSkipConfig: (config: SkipConfig) => set({ skipConfig: config }),
-
+      cachedEpisodes: [],
+      addCachedEpisode: (episode: CachedEpisode) => set((state) => {
+        const filtered = state.cachedEpisodes.filter((item) => item.key !== episode.key);
+        return { cachedEpisodes: [episode, ...filtered] };
+      }),
+      removeCachedEpisode: (key: string) => set((state) => ({
+        cachedEpisodes: state.cachedEpisodes.filter((item) => item.key !== key),
+      })),
+      clearCachedEpisodes: () => set({ cachedEpisodes: [] }),
     }),
     {
       name: "play-storage", // 存储的名称

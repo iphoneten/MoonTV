@@ -134,6 +134,9 @@ const PlayPageClient: FC = () => {
   const detailRef = useRef<SearchResult | null>(detail);
   const currentEpisodeIndexRef = useRef(currentEpisodeIndex);
   const isLockedRef = useRef(false);
+  const autoSwitchAttemptedRef = useRef<Set<string>>(new Set());
+  const autoSwitchingRef = useRef(false);
+  const lastAutoSwitchAtRef = useRef(0);
 
   // 同步最新值到 refs
   useEffect(() => {
@@ -431,45 +434,51 @@ const PlayPageClient: FC = () => {
       }
 
       setLoading(true);
-      setLoadingStage(sParam && idParam ? 'fetching' : 'searching');
-      setLoadingMessage(
-        sParam && idParam
-          ? '🎬 正在快速进入播放...'
-          : '🔍 正在搜索播放源...'
-      );
-
       try {
         let detailData: SearchResult | null = null;
         let sourcesInfo: SearchResult[] = [];
 
-        // --- 核心优化：并行执行基础检查 ---
-        const [recordsData, searchResults, targetDetail] = await Promise.all([
-          getAllPlayRecords().catch(() => ({} as Record<string, any>)),
-          // 如果没有现成 ID，或者带了 ID 但我们需要后台静默搜索换源列表
-          (!sParam || !idParam)
-            ? fetchSourcesData(sTitleParam || titleParam)
-            : Promise.resolve([]),
-          // 如果有现成 ID，尝试直接请求详情
-          (sParam && idParam)
+        // 先读取历史记录，判断是否从历史记录进入（存在对应记录）
+        const recordsData = await getAllPlayRecords().catch(
+          () => ({} as Record<string, any>)
+        );
+        const records = recordsData as Record<string, any>;
+        const recordKey =
+          sParam && idParam ? generateStorageKey(sParam, idParam) : '';
+        const record = recordKey ? records[recordKey] : null;
+        const isHistoryEntry = !!record;
+
+        const query = sTitleParam || record?.search_title || titleParam;
+        const shouldSearchAllSources = !sParam || !idParam || isHistoryEntry;
+
+        setLoadingStage(shouldSearchAllSources ? 'searching' : 'fetching');
+        setLoadingMessage(
+          shouldSearchAllSources
+            ? '🔍 正在搜索播放源...'
+            : '🎬 正在快速进入播放...'
+        );
+
+        // --- 并行执行基础检查 ---
+        const [searchResults, targetDetail] = await Promise.all([
+          shouldSearchAllSources ? fetchSourcesData(query) : Promise.resolve([]),
+          // 如果有现成 ID 且非历史记录入口，尝试直接请求详情
+          sParam && idParam && !isHistoryEntry
             ? fetchSourceDetail(sParam, idParam).catch((err) => {
               console.warn('直接获取详情失败，将尝试从搜索结果中恢复:', err);
               return [];
             })
-            : Promise.resolve([])
+            : Promise.resolve([]),
         ]);
 
-        const records = recordsData as Record<string, any>;
         sourcesInfo = searchResults;
 
         // 1. 优先路径：已有 Source 和 ID
-        if (sParam && idParam) {
+        if (sParam && idParam && !isHistoryEntry) {
           if (targetDetail && targetDetail.length > 0) {
             detailData = targetDetail[0];
           }
 
           // 检查播放记录并准备恢复进度
-          const key = generateStorageKey(sParam, idParam);
-          const record = records[key];
           if (record) {
             setCurrentEpisodeIndex(record.index - 1);
             resumeTimeRef.current = record.play_time;
@@ -477,7 +486,7 @@ const PlayPageClient: FC = () => {
 
           // 如果因为有 ID 所以跳过了初次搜索，现在在后台补齐换源列表
           if (sourcesInfo.length === 0) {
-            fetchSourcesData(sTitleParam || titleParam).then(res => {
+            fetchSourcesData(query).then(res => {
               if (res.length > 0) setAvailableSources(res);
             });
           }
@@ -485,14 +494,18 @@ const PlayPageClient: FC = () => {
 
         // 2. 兜底路径：如果直连详情失败了，或者原本就没有 ID，尝试从搜索结果中寻找
         if (!detailData) {
-          const finalSources = sourcesInfo.length > 0 ? sourcesInfo : await fetchSourcesData(sTitleParam || titleParam);
+          const finalSources =
+            sourcesInfo.length > 0 ? sourcesInfo : await fetchSourcesData(query);
           sourcesInfo = finalSources;
 
           if (finalSources.length > 0) {
             let matched = finalSources.find((s: any) => s.source === sParam && s.id === idParam);
 
             // 如果需要优选且开启了优化，则在一批搜索结果中寻找最快的
-            if (!matched && needPreferRef.current && optimizationEnabled) {
+            const shouldPrefer =
+              optimizationEnabled &&
+              (needPreferRef.current || shouldSearchAllSources);
+            if (!matched && shouldPrefer) {
               setLoadingMessage('🚀 正在为您测速并优选最佳播放源...');
               const { bestSource, precomputedVideoInfo, sortedAvailableSources } =
                 await preferBestSource(finalSources, finalSources);
@@ -652,6 +665,40 @@ const PlayPageClient: FC = () => {
       setIsVideoLoading(false);
       setError(err instanceof Error ? err.message : '换源失败');
     }
+  };
+
+  const attemptAutoSwitch = (reason: string) => {
+    if (autoSwitchingRef.current) return;
+    if (availableSources.length <= 1) return;
+    const now = Date.now();
+    if (now - lastAutoSwitchAtRef.current < 1500) return;
+    lastAutoSwitchAtRef.current = now;
+
+    const currentKey = `${currentSourceRef.current}-${currentIdRef.current}`;
+    if (currentSourceRef.current && currentIdRef.current) {
+      autoSwitchAttemptedRef.current.add(currentKey);
+    }
+
+    const nextSource = availableSources.find((s) => {
+      const key = `${s.source}-${s.id}`;
+      return !autoSwitchAttemptedRef.current.has(key);
+    });
+
+    if (!nextSource) {
+      console.warn('自动换源失败，已无可用候选:', reason);
+      setError('当前源无法播放，已尝试其他来源仍失败');
+      return;
+    }
+
+    console.warn('播放源异常，自动切换:', reason, nextSource);
+    autoSwitchingRef.current = true;
+    if (artPlayerRef.current?.notice) {
+      artPlayerRef.current.notice.show = '播放源异常，正在自动切换...';
+    }
+    handleSourceChange(nextSource.source, nextSource.id, nextSource.title);
+    setTimeout(() => {
+      autoSwitchingRef.current = false;
+    }, 1000);
   };
 
   // 处理长按快进逻辑
@@ -1345,6 +1392,7 @@ const PlayPageClient: FC = () => {
                     default:
                       console.log('无法恢复的错误');
                       hls.destroy();
+                      attemptAutoSwitch('hls-fatal');
                       break;
                   }
                 }
@@ -1521,6 +1569,7 @@ const PlayPageClient: FC = () => {
           if (artPlayerRef.current.currentTime > 0) {
             return;
           }
+          attemptAutoSwitch('player-error');
         });
         artPlayerRef.current.on('video:ended', () => {
           const d = detailRef.current;
